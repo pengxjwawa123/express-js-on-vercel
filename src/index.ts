@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { parseOPML } from './utils/opmlParser.js'
 import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
 import { initRedis, getCacheValue, setCacheValue, deleteCacheValue, isRedisConnected, getCacheStats } from './utils/redisCache.js'
+import { startScheduler, stopScheduler, getSchedulerStatus, triggerSchedulerOnce } from './utils/scheduler.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -16,32 +17,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')))
 // 缓存安全相关的 RSS 内容
 let cachedSecurityItems: any[] = []
 let lastCacheTime = 0
-let isUpdating = false // 防止并发更新
-const CACHE_DURATION = 1 * 60 * 60 * 1000 // 1小时缓存
-const BACKGROUND_UPDATE_INTERVAL = 30 * 60 * 1000 // 30分钟后台更新一次
-
-// 后台更新缓存（异步，不阻塞请求）
-async function updateCacheInBackground() {
-  if (isUpdating) {
-    console.log('Cache update already in progress, skipping...')
-    return
-  }
-  
-  isUpdating = true
-  try {
-    console.log('Starting background cache update...')
-    const feeds = parseOPML()
-    const securityItems = await fetchAllSecurityFeeds(feeds)
-    
-    cachedSecurityItems = securityItems
-    lastCacheTime = Date.now()
-    console.log(`Cache updated successfully: ${securityItems.length} items`)
-  } catch (error) {
-    console.error('Error updating cache in background:', error)
-  } finally {
-    isUpdating = false
-  }
-}
+const CACHE_DURATION = 1 * 60 * 60 * 1000 // 1小时缓存（备用，scheduler负责定时更新）
 
 // 共享的安全内容处理函数
 async function handleSecurityFeed(req: express.Request, res: express.Response) {
@@ -52,66 +28,61 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
       ? category as 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
       : undefined
     
+    // 优先从Redis获取缓存
+    let securityItems: any[] | null = null
+    let cacheSource: 'redis' | 'memory' | 'fresh' = 'fresh'
+    
+    if (isRedisConnected()) {
+      const redisKey = 'security_feeds:all'
+      const cachedJson = await getCacheValue(redisKey)
+      if (cachedJson) {
+        try {
+          securityItems = JSON.parse(cachedJson)
+          cacheSource = 'redis'
+          console.log(`✅ Cache hit from Redis: ${redisKey}`)
+          return renderSecurityPage(res, securityItems, true, categoryFilter, cacheSource)
+        } catch (parseError) {
+          console.error('Error parsing cached JSON:', parseError)
+          // 继续尝试从内存缓存或重新加载
+        }
+      }
+    }
+    
+    // 检查内存缓存
     const now = Date.now()
     const cacheAge = now - lastCacheTime
     const isCacheValid = cachedSecurityItems.length > 0 && cacheAge < CACHE_DURATION
-    const needsBackgroundUpdate = cacheAge > BACKGROUND_UPDATE_INTERVAL
-
-    // 先尝试从Redis获取缓存
-    let redisData: any[] | null = null
-    if (isRedisConnected()) {
-      const redisKey = `security_feeds:${categoryFilter || 'all'}`
-      const cachedJson = await getCacheValue(redisKey)
-      if (cachedJson) {
-        console.log(`Cache hit from Redis: ${redisKey}`)
-        redisData = JSON.parse(cachedJson)
-        return renderSecurityPage(res, redisData, true, categoryFilter, 'redis')
-      }
-    }
-
-    // 如果有有效缓存，立即返回
+    
     if (isCacheValid) {
-      // 如果缓存较旧，在后台更新（不阻塞响应）
-      if (needsBackgroundUpdate && !isUpdating) {
-        updateCacheInBackground().catch(err => 
-          console.error('Background update failed:', err)
-        )
-      }
+      console.log(`✅ Cache hit from memory`)
       return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter, 'memory')
     }
     
-    // 如果缓存过期但有旧数据，先返回旧数据，后台更新
+    // 如果缓存过期但有旧数据，先返回旧数据
     if (cachedSecurityItems.length > 0) {
-      console.log('Cache expired, returning stale data and updating in background...')
-      // 后台更新（不等待）
-      if (!isUpdating) {
-        updateCacheInBackground().catch(err => 
-          console.error('Background update failed:', err)
-        )
-      }
-      // 立即返回旧数据
+      console.log('Cache expired, returning stale data...')
       return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter, 'memory')
     }
     
-    // 如果没有缓存，必须等待数据加载（首次访问）
-    console.log('No cache available, fetching data...')
+    // 如果没有缓存，从RSS源获取
+    console.log('No cache available, fetching from RSS feeds...')
     const feeds = parseOPML()
     console.log(`Found ${feeds.length} RSS feeds`)
     
-    const securityItems = await fetchAllSecurityFeeds(feeds)
+    const newItems = await fetchAllSecurityFeeds(feeds)
     
-    // 更新缓存
-    cachedSecurityItems = securityItems
+    // 更新内存缓存
+    cachedSecurityItems = newItems
     lastCacheTime = now
-
+    
     // 同时存储到Redis
     if (isRedisConnected()) {
-      const redisKey = `security_feeds:all`
-      await setCacheValue(redisKey, JSON.stringify(securityItems), 1 * 60 * 60) // 1小时过期
+      const redisKey = 'security_feeds:all'
+      await setCacheValue(redisKey, JSON.stringify(newItems), 60 * 60) // 1小时过期
       console.log(`Cached to Redis: ${redisKey}`)
     }
     
-    renderSecurityPage(res, securityItems, false, categoryFilter, 'fresh')
+    renderSecurityPage(res, newItems, false, categoryFilter, 'fresh')
   } catch (error) {
     console.error('Error fetching security feeds:', error)
     
@@ -806,14 +777,52 @@ app.delete('/api/cache/clear', async (req, res) => {
   }
 })
 
+// 获取scheduler状态
+app.get('/api/scheduler/status', (req, res) => {
+  try {
+    const status = getSchedulerStatus()
+    res.json({
+      running: status,
+      message: status ? 'Scheduler is running (hourly RSS fetch enabled)' : 'Scheduler is not running',
+    })
+  } catch (error) {
+    console.error('Error getting scheduler status:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// 手动触发scheduler立即执行
+app.post('/api/scheduler/trigger', async (req, res) => {
+  try {
+    console.log('Manual scheduler trigger requested')
+    await triggerSchedulerOnce()
+    res.json({
+      success: true,
+      message: 'Scheduler triggered successfully, RSS data will be fetched and cached now',
+    })
+  } catch (error) {
+    console.error('Error triggering scheduler:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
 // 初始化Redis并启动服务器
 async function startServer() {
   try {
     // 尝试连接Redis
     await initRedis()
     console.log('Redis cache initialized')
+    
+    // 初始化后台scheduler，每小时自动拉取并缓存RSS数据（cron: 每小时第0分钟）
+    await startScheduler('0 * * * *')
+    console.log('Background scheduler initialized (hourly at :00 minutes)')
   } catch (error) {
-    console.warn('Redis initialization failed, using memory cache only:', error)
+    console.warn('Initialization error:', error)
+    // 即使Redis或Scheduler失败，服务器仍然继续运行，使用内存缓存
   }
 }
 
