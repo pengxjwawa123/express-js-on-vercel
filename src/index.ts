@@ -17,7 +17,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')))
 let cachedSecurityItems: any[] = []
 let lastCacheTime = 0
 let isUpdating = false // 防止并发更新
-const CACHE_DURATION = 2 * 60 * 60 * 1000 // 2小时缓存
+const CACHE_DURATION = 1 * 60 * 60 * 1000 // 1小时缓存
 const BACKGROUND_UPDATE_INTERVAL = 30 * 60 * 1000 // 30分钟后台更新一次
 
 // 后台更新缓存（异步，不阻塞请求）
@@ -107,7 +107,7 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     // 同时存储到Redis
     if (isRedisConnected()) {
       const redisKey = `security_feeds:all`
-      await setCacheValue(redisKey, JSON.stringify(securityItems), 2 * 60 * 60) // 2小时过期
+      await setCacheValue(redisKey, JSON.stringify(securityItems), 1 * 60 * 60) // 1小时过期
       console.log(`Cached to Redis: ${redisKey}`)
     }
     
