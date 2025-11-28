@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { parseOPML } from './utils/opmlParser.js'
 import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
+import { initRedis, getCacheValue, setCacheValue, deleteCacheValue, isRedisConnected, getCacheStats } from './utils/redisCache.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -55,7 +56,19 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     const cacheAge = now - lastCacheTime
     const isCacheValid = cachedSecurityItems.length > 0 && cacheAge < CACHE_DURATION
     const needsBackgroundUpdate = cacheAge > BACKGROUND_UPDATE_INTERVAL
-    
+
+    // 先尝试从Redis获取缓存
+    let redisData: any[] | null = null
+    if (isRedisConnected()) {
+      const redisKey = `security_feeds:${categoryFilter || 'all'}`
+      const cachedJson = await getCacheValue(redisKey)
+      if (cachedJson) {
+        console.log(`Cache hit from Redis: ${redisKey}`)
+        redisData = JSON.parse(cachedJson)
+        return renderSecurityPage(res, redisData, true, categoryFilter, 'redis')
+      }
+    }
+
     // 如果有有效缓存，立即返回
     if (isCacheValid) {
       // 如果缓存较旧，在后台更新（不阻塞响应）
@@ -64,7 +77,7 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
           console.error('Background update failed:', err)
         )
       }
-      return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter)
+      return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter, 'memory')
     }
     
     // 如果缓存过期但有旧数据，先返回旧数据，后台更新
@@ -77,7 +90,7 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
         )
       }
       // 立即返回旧数据
-      return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter)
+      return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter, 'memory')
     }
     
     // 如果没有缓存，必须等待数据加载（首次访问）
@@ -90,8 +103,15 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     // 更新缓存
     cachedSecurityItems = securityItems
     lastCacheTime = now
+
+    // 同时存储到Redis
+    if (isRedisConnected()) {
+      const redisKey = `security_feeds:all`
+      await setCacheValue(redisKey, JSON.stringify(securityItems), 2 * 60 * 60) // 2小时过期
+      console.log(`Cached to Redis: ${redisKey}`)
+    }
     
-    renderSecurityPage(res, securityItems, false, categoryFilter)
+    renderSecurityPage(res, securityItems, false, categoryFilter, 'fresh')
   } catch (error) {
     console.error('Error fetching security feeds:', error)
     
@@ -103,7 +123,7 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
       const fallbackCategoryFilter = category && validCategories.includes(category) 
         ? category as 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
         : undefined
-      return renderSecurityPage(res, cachedSecurityItems, true, fallbackCategoryFilter)
+      return renderSecurityPage(res, cachedSecurityItems, true, fallbackCategoryFilter, 'memory')
     }
     
     res.status(500).type('html').send(`
@@ -290,7 +310,8 @@ function renderSecurityPage(
   res: express.Response, 
   items: any[], 
   fromCache: boolean,
-  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
+  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug',
+  cacheSource?: 'redis' | 'memory' | 'fresh'
 ) {
   // 确定要使用的数据源（优先使用缓存）
   const allItems = fromCache ? cachedSecurityItems : items
@@ -590,7 +611,7 @@ function renderSecurityPage(
           <h1>Web3 Security & Vulnerabilities Feed</h1>
           <div class="meta">
             Latest security-related news and vulnerabilities from Web3 RSS feeds
-            ${fromCache ? '<span class="cache-badge">Cached</span>' : ''}
+            ${fromCache ? `<span class="cache-badge">${cacheSource === 'redis' ? '⚡ Redis Cache' : 'Memory Cache'}</span>` : ''}
           </div>
         </div>
         <div class="stats">
@@ -736,5 +757,67 @@ function formatDate(dateString: string): string {
 app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+
+// Cache stats endpoint
+app.get('/api/cache/stats', async (req, res) => {
+  try {
+    const stats = await getCacheStats()
+    res.json({
+      redis: stats,
+      memory: {
+        cachedItems: cachedSecurityItems.length,
+        lastUpdateTime: new Date(lastCacheTime).toISOString(),
+        cacheAgeMinutes: Math.round((Date.now() - lastCacheTime) / 60000),
+      },
+    })
+  } catch (error) {
+    console.error('Error getting cache stats:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// Clear cache endpoint
+app.delete('/api/cache/clear', async (req, res) => {
+  try {
+    // 清空内存缓存
+    cachedSecurityItems = []
+    lastCacheTime = 0
+
+    // 清空Redis缓存
+    if (isRedisConnected()) {
+      await deleteCacheValue('security_feeds:all')
+      await deleteCacheValue('security_feeds:blockchain_attack')
+      await deleteCacheValue('security_feeds:vulnerability_disclosure')
+      await deleteCacheValue('security_feeds:exploit')
+      await deleteCacheValue('security_feeds:smart_contract_bug')
+    }
+
+    res.json({
+      success: true,
+      message: 'Cache cleared successfully',
+    })
+  } catch (error) {
+    console.error('Error clearing cache:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// 初始化Redis并启动服务器
+async function startServer() {
+  try {
+    // 尝试连接Redis
+    await initRedis()
+    console.log('Redis cache initialized')
+  } catch (error) {
+    console.warn('Redis initialization failed, using memory cache only:', error)
+  }
+}
+
+// 调用启动函数
+startServer().catch(err => console.error('Failed to start server:', err))
 
 export default app
