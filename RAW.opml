@@ -367,9 +367,7 @@
 		<outline text="Blockworks" title="Blockworks" description="" type="rss" version="RSS" htmlUrl="https://blockworks.co/" xmlUrl="https://blockworks.co/feed/"/>
 		<outline text="ChainFeeds Selected (Chinese)" title="ChainFeeds Selected (Chinese)" description="" type="rss" version="RSS" htmlUrl="" xmlUrl="https://www.chainfeeds.xyz/rss"/>
 		<outline text="CoinDesk" title="CoinDesk" description="" type="rss" version="RSS" htmlUrl="https://www.coindesk.com/" xmlUrl="http://feeds.feedburner.com/Coindesk"/>
-		<outline text="Cointelegraph.com News" title="Cointelegraph.com News" description="" type="rss" version="RSS" htmlUrl="https://cointelegraph.com/" xmlUrl="https://cointelegraph.com/rss"/>
 		<outline text="Crunchbase Crypto" title="Crunchbase Crypto" description="" type="rss" version="RSS" htmlUrl="https://news.crunchbase.com/sections/fintech-ecommerce/crypto/" xmlUrl="https://news.crunchbase.com/sections/crypto/feed/"/>
-		<outline text="Crypto Briefing" title="Crypto Briefing" description="" type="rss" version="RSS" htmlUrl="https://cryptobriefing.com/" xmlUrl="https://cryptobriefing.com/feed/"/>
 		<outline text="Crypto News on Seeking Alpha" title="Crypto News on Seeking Alpha" description="" type="rss" version="RSS" htmlUrl="https://seekingalpha.com/news/crypto" xmlUrl="https://seekingalpha.com/news/crypto/feed"/>
 		<outline text="Decrypt" title="Decrypt" description="" type="rss" version="RSS" htmlUrl="https://decrypt.co/feed" xmlUrl="https://decryptmedia.com/feed/"/>
 		<outline text="ECN (Chinese)" title="ECN (Chinese)" description="" type="rss" version="RSS" htmlUrl="http://github.com/dylang/node-rss" xmlUrl="https://news.ethereum.cn/rss.xml"/>
@@ -631,6 +629,9 @@
 		<outline text="Ethereum Research - Latest topics" title="Ethereum Research - Latest topics" description="" type="rss" version="RSS" htmlUrl="https://ethresear.ch/latest" xmlUrl="https://ethresear.ch/latest.rss"/>
 	</outline>
 	<outline text="08. Blockchain Security News" title="08. Blockchain Security News">
+		<outline text="Altcoin Buzz » Blockchain" title="Altcoin Buzz » Blockchain" description="Latest Blockchain Technology news including distributed ledger technologies" type="rss" version="RSS" htmlUrl="https://www.altcoinbuzz.io/category/cryptocurrency-news/blockchain-technology/" xmlUrl="https://www.altcoinbuzz.io/category/cryptocurrency-news/blockchain-technology/feed/"/>
+		<outline text="Chainwire » Blockchain" title="Chainwire » Blockchain" description="Blockchain and Crypto Press Release Distribution on Chainwire" type="rss" version="RSS" htmlUrl="https://chainwire.org/tag/blockchain/" xmlUrl="https://chainwire.org/tag/blockchain/feed/"/>
+		<outline text="Bitcoin Insider » Blockchain" title="Bitcoin Insider » Blockchain" description="Latest news about blockchain, bitcoin, and all cryptocurrencies" type="rss" version="RSS" htmlUrl="https://www.bitcoininsider.org/category/blockchain" xmlUrl="https://www.bitcoininsider.org/category/blockchain/feed/"/>
 		<outline text="Cointelegraph" title="Cointelegraph" description="Latest news about Bitcoin, Ethereum, Blockchain, Altcoin" type="rss" version="RSS" htmlUrl="https://cointelegraph.com/" xmlUrl="https://cointelegraph.com/rss"/>
 		<outline text="Crypto.News" title="Crypto.News" description="Latest and most relevant updates on Bitcoin, Ethereum, and Ripple" type="rss" version="RSS" htmlUrl="https://crypto.news/" xmlUrl="https://crypto.news/feed/"/>
 		<outline text="NewsBTC" title="NewsBTC" description="Bitcoin news service covering cryptocurrency and blockchain" type="rss" version="RSS" htmlUrl="https://www.newsbtc.com/" xmlUrl="https://www.newsbtc.com/feed/"/>
