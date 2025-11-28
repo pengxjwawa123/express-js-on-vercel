@@ -128,13 +128,27 @@ export async function sendTelegramMessages(
   botToken: string,
   chatId: string | number,
   items: any[],
-  timeRange: string
+  timeRange: string,
+  useOpenAI: boolean = true
 ): Promise<boolean> {
   try {
     // Telegram 消息最大长度为 4096 字符
     const MAX_MESSAGE_LENGTH = 4000
     
-    const fullMessage = formatSecurityDataForTelegram(items, timeRange)
+    let fullMessage: string
+    
+    // 如果启用 AI 优化，先优化内容（使用 DeepSeek）
+    if (useOpenAI) {
+      try {
+        const { optimizeSecurityDataWithOpenAI } = await import('./openaiOptimizer.js')
+        fullMessage = await optimizeSecurityDataWithOpenAI(items, timeRange)
+      } catch (error) {
+        console.error('DeepSeek optimization failed, using default format:', error)
+        fullMessage = formatSecurityDataForTelegram(items, timeRange)
+      }
+    } else {
+      fullMessage = formatSecurityDataForTelegram(items, timeRange)
+    }
     
     // 如果消息太长，需要分割
     if (fullMessage.length <= MAX_MESSAGE_LENGTH) {
