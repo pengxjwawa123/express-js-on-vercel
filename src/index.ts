@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { parseOPML } from './utils/opmlParser.js'
 import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
+import { sendTelegramMessages } from './utils/telegramBot.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -16,8 +17,40 @@ app.use(express.static(path.join(__dirname, '..', 'public')))
 let cachedSecurityItems: any[] = []
 let lastCacheTime = 0
 let isUpdating = false // 防止并发更新
+let lastTelegramPushTime = 0 // 上次推送到 Telegram 的时间
 const CACHE_DURATION = 2 * 60 * 60 * 1000 // 2小时缓存
 const BACKGROUND_UPDATE_INTERVAL = 30 * 60 * 1000 // 30分钟后台更新一次
+const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
+
+// 推送到 Telegram Bot
+async function pushToTelegramBot(newItems: any[], timeRange: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  const chatId = process.env.TELEGRAM_CHAT_ID
+  
+  if (!botToken || !chatId) {
+    console.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured, skipping Telegram push')
+    return
+  }
+
+  try {
+    if (newItems.length === 0) {
+      console.log('No new items to push to Telegram')
+      return
+    }
+
+    console.log(`Pushing ${newItems.length} new items to Telegram...`)
+    const success = await sendTelegramMessages(botToken, chatId, newItems, timeRange)
+    
+    if (success) {
+      lastTelegramPushTime = Date.now()
+      console.log('Telegram push completed successfully')
+    } else {
+      console.error('Failed to push to Telegram')
+    }
+  } catch (error) {
+    console.error('Error pushing to Telegram Bot:', error)
+  }
+}
 
 // 后台更新缓存（异步，不阻塞请求）
 async function updateCacheInBackground() {
@@ -32,9 +65,29 @@ async function updateCacheInBackground() {
     const feeds = parseOPML()
     const securityItems = await fetchAllSecurityFeeds(feeds)
     
+    // 获取上次推送后的新数据
+    const now = Date.now()
+    const cutoffTime = lastTelegramPushTime > 0 ? lastTelegramPushTime : now - TELEGRAM_PUSH_INTERVAL
+    
+    // 过滤出新的数据（基于发布时间）
+    const newItems = securityItems.filter(item => {
+      if (!item.pubDate) return false
+      const itemTime = new Date(item.pubDate).getTime()
+      return itemTime > cutoffTime
+    })
+    
     cachedSecurityItems = securityItems
-    lastCacheTime = Date.now()
-    console.log(`Cache updated successfully: ${securityItems.length} items`)
+    lastCacheTime = now
+    
+    console.log(`Cache updated successfully: ${securityItems.length} items (${newItems.length} new)`)
+    
+    // 如果有新数据，推送到 Telegram
+    if (newItems.length > 0) {
+      const timeRange = lastTelegramPushTime > 0
+        ? `过去 ${Math.floor((now - lastTelegramPushTime) / 60000)} 分钟`
+        : '最近 30 分钟'
+      await pushToTelegramBot(newItems, timeRange)
+    }
   } catch (error) {
     console.error('Error updating cache in background:', error)
   } finally {
@@ -91,7 +144,26 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     cachedSecurityItems = securityItems
     lastCacheTime = now
     
-    renderSecurityPage(res, securityItems, false, categoryFilter, now)
+    // 首次加载时，如果有 Telegram 配置，推送所有数据（可选）
+    // 或者只推送新数据
+    const cutoffTime = lastTelegramPushTime > 0 ? lastTelegramPushTime : now - TELEGRAM_PUSH_INTERVAL
+    const newItems = securityItems.filter(item => {
+      if (!item.pubDate) return false
+      const itemTime = new Date(item.pubDate).getTime()
+      return itemTime > cutoffTime
+    })
+    
+    if (newItems.length > 0) {
+      const timeRange = lastTelegramPushTime > 0
+        ? `过去 ${Math.floor((now - lastTelegramPushTime) / 60000)} 分钟`
+        : '最近 30 分钟'
+      // 异步推送，不阻塞响应
+      pushToTelegramBot(newItems, timeRange).catch(err => 
+        console.error('Telegram push failed:', err)
+      )
+    }
+    
+    renderSecurityPage(res, securityItems, false, categoryFilter)
   } catch (error) {
     console.error('Error fetching security feeds:', error)
     
@@ -286,37 +358,14 @@ app.get('/api/security/code-bugs', async (req, res) => {
   }
 })
 
-// 格式化相对时间
-function formatRelativeTime(timestamp: number): string {
-  const now = Date.now()
-  const diff = now - timestamp
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-  
-  if (days > 0) {
-    return `${days} ${days === 1 ? 'day' : 'days'} ago`
-  } else if (hours > 0) {
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
-  } else if (minutes > 0) {
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`
-  } else {
-    return 'just now'
-  }
-}
-
 function renderSecurityPage(
   res: express.Response, 
   items: any[], 
   fromCache: boolean,
-  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug',
-  fetchTime?: number
+  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
 ) {
   // 确定要使用的数据源（优先使用缓存）
   const allItems = fromCache ? cachedSecurityItems : items
-  // 确定显示的时间戳：如果提供了 fetchTime 使用它，否则使用 lastCacheTime
-  const displayTime = fetchTime || lastCacheTime
   
   // 根据筛选条件过滤数据
   const filteredItems = categoryFilter 
@@ -586,7 +635,6 @@ function renderSecurityPage(
           <div class="meta">
             Latest security-related news and vulnerabilities from Web3 RSS feeds
             ${fromCache ? '<span class="cache-badge">Cached</span>' : ''}
-            ${displayTime > 0 ? `<span style="margin-left: 1rem; color: #888;">Last updated: ${formatRelativeTime(displayTime)}</span>` : ''}
           </div>
         </div>
         <div class="stats">
@@ -710,6 +758,71 @@ function formatDate(dateString: string): string {
 // Health check
 app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+// 手动触发 Telegram 推送
+app.get('/api/telegram/push', async (req, res) => {
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN
+    const chatId = process.env.TELEGRAM_CHAT_ID
+    
+    if (!botToken || !chatId) {
+      return res.status(400).json({
+        error: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured',
+        message: 'Please set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID'
+      })
+    }
+
+    console.log('Manual Telegram push triggered...')
+    
+    // 获取最新数据
+    const feeds = parseOPML()
+    const allItems = await fetchAllSecurityFeeds(feeds)
+    
+    // 获取最近的数据（最近30分钟或最近10条）
+    const now = Date.now()
+    const cutoffTime = now - (30 * 60 * 1000) // 最近30分钟
+    
+    const recentItems = allItems
+      .filter(item => {
+        if (!item.pubDate) return false
+        const itemTime = new Date(item.pubDate).getTime()
+        return itemTime > cutoffTime
+      })
+      .slice(0, 10) // 最多10条
+    
+    // 如果没有最近的数据，使用最新的10条
+    const itemsToPush = recentItems.length > 0 ? recentItems : allItems.slice(0, 10)
+    
+    const timeRange = recentItems.length > 0 
+      ? '最近 30 分钟'
+      : '最新数据'
+    
+    // 推送到 Telegram
+    const { sendTelegramMessages } = await import('./utils/telegramBot.js')
+    const success = await sendTelegramMessages(botToken, chatId, itemsToPush, timeRange)
+    
+    if (success) {
+      lastTelegramPushTime = now
+      res.json({
+        success: true,
+        message: 'Telegram push sent successfully',
+        itemsCount: itemsToPush.length,
+        timeRange: timeRange
+      })
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send Telegram message'
+      })
+    }
+  } catch (error) {
+    console.error('Error in manual Telegram push:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
 })
 
 export default app
