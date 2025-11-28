@@ -41,9 +41,9 @@ export async function fetchAndCacheRSSData() {
 
 /**
  * 启动定时任务（使用cron）
- * @param cronExpression - cron表达式，默认每小时执行一次 "0 * * * *"
+ * @param cronExpression - cron表达式，默认每30分钟执行一次
  */
-export async function startScheduler(cronExpression: string = '0 * * * *') {
+export async function startScheduler(cronExpression: string = '*/30 * * * *') {
   try {
     if (isSchedulerRunning && cronTask) {
       console.warn('[Scheduler] Scheduler already running')
@@ -92,7 +92,7 @@ export function getSchedulerStatus() {
   return {
     running: isSchedulerRunning,
     status: isSchedulerRunning ? 'Running' : 'Not running',
-    nextRunTime: isSchedulerRunning ? 'Every hour at 0 minutes' : 'N/A',
+    nextRunTime: isSchedulerRunning ? 'Every 30 minutes' : 'N/A',
   }
 }
 

@@ -817,9 +817,9 @@ async function startServer() {
     await initRedis()
     console.log('Redis cache initialized')
     
-    // 初始化后台scheduler，每小时自动拉取并缓存RSS数据（cron: 每小时第0分钟）
-    await startScheduler('0 * * * *')
-    console.log('Background scheduler initialized (hourly at :00 minutes)')
+    // 初始化后台scheduler，每30分钟自动拉取并缓存RSS数据（cron: 每30分钟）
+    await startScheduler('*/30 * * * *')
+    console.log('Background scheduler initialized (every 30 minutes)')
   } catch (error) {
     console.warn('Initialization error:', error)
     // 即使Redis或Scheduler失败，服务器仍然继续运行，使用内存缓存
