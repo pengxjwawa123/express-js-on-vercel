@@ -91,7 +91,7 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     cachedSecurityItems = securityItems
     lastCacheTime = now
     
-    renderSecurityPage(res, securityItems, false, categoryFilter)
+    renderSecurityPage(res, securityItems, false, categoryFilter, now)
   } catch (error) {
     console.error('Error fetching security feeds:', error)
     
@@ -286,14 +286,37 @@ app.get('/api/security/code-bugs', async (req, res) => {
   }
 })
 
+// 格式化相对时间
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) {
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`
+  } else if (hours > 0) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+  } else if (minutes > 0) {
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`
+  } else {
+    return 'just now'
+  }
+}
+
 function renderSecurityPage(
   res: express.Response, 
   items: any[], 
   fromCache: boolean,
-  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
+  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug',
+  fetchTime?: number
 ) {
   // 确定要使用的数据源（优先使用缓存）
   const allItems = fromCache ? cachedSecurityItems : items
+  // 确定显示的时间戳：如果提供了 fetchTime 使用它，否则使用 lastCacheTime
+  const displayTime = fetchTime || lastCacheTime
   
   // 根据筛选条件过滤数据
   const filteredItems = categoryFilter 
@@ -563,6 +586,7 @@ function renderSecurityPage(
           <div class="meta">
             Latest security-related news and vulnerabilities from Web3 RSS feeds
             ${fromCache ? '<span class="cache-badge">Cached</span>' : ''}
+            ${displayTime > 0 ? `<span style="margin-left: 1rem; color: #888;">Last updated: ${formatRelativeTime(displayTime)}</span>` : ''}
           </div>
         </div>
         <div class="stats">
