@@ -24,13 +24,8 @@ const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
 
 // 推送到 Telegram Bot
 async function pushToTelegramBot(newItems: any[], timeRange: string) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN
-  const chatId = process.env.TELEGRAM_CHAT_ID
-  
-  if (!botToken || !chatId) {
-    console.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured, skipping Telegram push')
-    return
-  }
+  const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
+  const chatId = '7715712244'
 
   try {
     if (newItems.length === 0) {
@@ -763,15 +758,8 @@ app.get('/healthz', (req, res) => {
 // 手动触发 Telegram 推送
 app.get('/api/telegram/push', async (req, res) => {
   try {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN
-    const chatId = process.env.TELEGRAM_CHAT_ID
-    
-    if (!botToken || !chatId) {
-      return res.status(400).json({
-        error: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured',
-        message: 'Please set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID'
-      })
-    }
+    const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
+    const chatId = '7715712244'
 
     console.log('Manual Telegram push triggered...')
     
