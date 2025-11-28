@@ -2,7 +2,7 @@ import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { parseOPML } from './utils/opmlParser.js'
-import { fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
+import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -17,66 +17,35 @@ let cachedSecurityItems: any[] = []
 let lastCacheTime = 0
 const CACHE_DURATION = 30 * 60 * 1000 // 30分钟缓存
 
-// Home route - HTML
-app.get('/', (req, res) => {
-  res.type('html').send(`
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8"/>
-        <title>Express on Vercel</title>
-        <link rel="stylesheet" href="/style.css" />
-      </head>
-      <body>
-        <nav>
-          <a href="/">Home</a>
-          <a href="/about">About</a>
-          <a href="/api-data">API Data</a>
-          <a href="/security">Web3 Security</a>
-          <a href="/healthz">Health</a>
-        </nav>
-        <h1>Welcome to Express on Vercel 🚀</h1>
-        <p>This is a minimal example without a database or forms.</p>
-        <img src="/logo.png" alt="Logo" width="120" />
-      </body>
-    </html>
-  `)
-})
-
-app.get('/about', function (req, res) {
-  res.sendFile(path.join(__dirname, '..', 'components', 'about.htm'))
-})
-
-// Example API endpoint - JSON
-app.get('/api-data', (req, res) => {
-  res.json({
-    message: 'Here is some sample API data',
-    items: ['apple', 'banana', 'cherry'],
-  })
-})
-
-// Web3 Security RSS Feed
-app.get('/security', async (req, res) => {
+// 共享的安全内容处理函数
+async function handleSecurityFeed(req: express.Request, res: express.Response) {
   try {
+    const category = req.query.category as string | undefined
+    const validCategories = ['blockchain_attack', 'vulnerability_disclosure', 'exploit', 'smart_contract_bug']
+    const categoryFilter = category && validCategories.includes(category) 
+      ? category as 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
+      : undefined
+    
     const now = Date.now()
     
     // 检查缓存是否有效
     if (cachedSecurityItems.length > 0 && (now - lastCacheTime) < CACHE_DURATION) {
-      return renderSecurityPage(res, cachedSecurityItems, true)
+      // 如果有缓存，直接使用缓存数据（筛选在渲染时进行）
+      return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter)
     }
     
     // 解析 OPML 并获取所有 feeds
     const feeds = parseOPML()
     console.log(`Found ${feeds.length} RSS feeds`)
     
-    // 获取所有安全相关的内容
-    const securityItems = await fetchAllSecurityFeedsWithCategory(feeds)
+    // 总是获取所有数据并缓存（筛选在渲染时进行）
+    const securityItems = await fetchAllSecurityFeeds(feeds)
     
     // 更新缓存
     cachedSecurityItems = securityItems
     lastCacheTime = now
     
-    renderSecurityPage(res, securityItems, false)
+    renderSecurityPage(res, securityItems, false, categoryFilter)
   } catch (error) {
     console.error('Error fetching security feeds:', error)
     res.status(500).type('html').send(`
@@ -99,7 +68,25 @@ app.get('/security', async (req, res) => {
       </html>
     `)
   }
+}
+
+// Home route - 直接展示安全内容
+app.get('/', handleSecurityFeed)
+
+app.get('/about', function (req, res) {
+  res.sendFile(path.join(__dirname, '..', 'components', 'about.htm'))
 })
+
+// Example API endpoint - JSON
+app.get('/api-data', (req, res) => {
+  res.json({
+    message: 'Here is some sample API data',
+    items: ['apple', 'banana', 'cherry'],
+  })
+})
+
+// Web3 Security RSS Feed
+app.get('/security', handleSecurityFeed)
 
 // API endpoint - 按分类获取安全数据
 app.get('/api/security', async (req, res) => {
@@ -141,30 +128,132 @@ app.get('/api/security/blockchain-attacks', async (req, res) => {
   }
 })
 
-// API endpoint - 只获取漏洞披露数据
-app.get('/api/security/vulnerabilities', async (req, res) => {
+// API endpoint - 只获取钱包被黑数据
+app.get('/api/security/wallet-hacks', async (req, res) => {
   try {
     const feeds = parseOPML()
-    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'vulnerability_disclosure')
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'blockchain_attack')
+    const walletHacks = items.filter(item => item.subcategory === 'wallet_hack')
     
     res.json({
-      count: items.length,
-      category: 'vulnerability_disclosure',
-      items,
+      count: walletHacks.length,
+      subcategory: 'wallet_hack',
+      items: walletHacks,
     })
   } catch (error) {
-    console.error('Error in /api/security/vulnerabilities:', error)
+    console.error('Error in /api/security/wallet-hacks:', error)
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Unknown error',
     })
   }
 })
 
-function renderSecurityPage(res: express.Response, items: any[], fromCache: boolean) {
-  const blockchainAttacks = items.filter(i => i.category === 'blockchain_attack')
-  const vulnerabilityDisclosures = items.filter(i => i.category === 'vulnerability_disclosure')
-  const exploits = items.filter(i => i.category === 'exploit')
-  const contractBugs = items.filter(i => i.category === 'smart_contract_bug')
+// API endpoint - 只获取公链安全事件数据
+app.get('/api/security/public-chain-attacks', async (req, res) => {
+  try {
+    const feeds = parseOPML()
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'blockchain_attack')
+    const chainAttacks = items.filter(item => item.subcategory === 'public_chain_attack')
+    
+    res.json({
+      count: chainAttacks.length,
+      subcategory: 'public_chain_attack',
+      items: chainAttacks,
+    })
+  } catch (error) {
+    console.error('Error in /api/security/public-chain-attacks:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// API endpoint - 只获取跨链桥接被黑数据
+app.get('/api/security/bridge-hacks', async (req, res) => {
+  try {
+    const feeds = parseOPML()
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'blockchain_attack')
+    const bridgeHacks = items.filter(item => item.subcategory === 'bridge_hack')
+    
+    res.json({
+      count: bridgeHacks.length,
+      subcategory: 'bridge_hack',
+      items: bridgeHacks,
+    })
+  } catch (error) {
+    console.error('Error in /api/security/bridge-hacks:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// API endpoint - 只获取被盗资金数据
+app.get('/api/security/stolen-funds', async (req, res) => {
+  try {
+    const feeds = parseOPML()
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'blockchain_attack')
+    const stolenFunds = items.filter(item => item.subcategory === 'stolen_funds')
+    
+    res.json({
+      count: stolenFunds.length,
+      subcategory: 'stolen_funds',
+      items: stolenFunds,
+    })
+  } catch (error) {
+    console.error('Error in /api/security/stolen-funds:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// API endpoint - 只获取代码级别bug数据
+app.get('/api/security/code-bugs', async (req, res) => {
+  try {
+    const feeds = parseOPML()
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'blockchain_attack')
+    const codeBugs = items.filter(item => item.subcategory === 'code_bug')
+    
+    res.json({
+      count: codeBugs.length,
+      subcategory: 'code_bug',
+      items: codeBugs,
+    })
+  } catch (error) {
+    console.error('Error in /api/security/code-bugs:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+function renderSecurityPage(
+  res: express.Response, 
+  items: any[], 
+  fromCache: boolean,
+  categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
+) {
+  // 确定要使用的数据源（优先使用缓存）
+  const allItems = fromCache ? cachedSecurityItems : items
+  
+  // 根据筛选条件过滤数据
+  const filteredItems = categoryFilter 
+    ? allItems.filter(i => i.category === categoryFilter)
+    : allItems
+  
+  // 统计各分类的数量（使用全部数据）
+  const blockchainAttacks = allItems.filter(i => i.category === 'blockchain_attack')
+  const vulnerabilityDisclosures = allItems.filter(i => i.category === 'vulnerability_disclosure')
+  const exploits = allItems.filter(i => i.category === 'exploit')
+  const contractBugs = allItems.filter(i => i.category === 'smart_contract_bug')
+  
+  // 统计子分类的数量
+  const walletHacks = blockchainAttacks.filter(i => i.subcategory === 'wallet_hack')
+  const publicChainAttacks = blockchainAttacks.filter(i => i.subcategory === 'public_chain_attack')
+  const bridgeHacks = blockchainAttacks.filter(i => i.subcategory === 'bridge_hack')
+  const stolenFunds = blockchainAttacks.filter(i => i.subcategory === 'stolen_funds')
+  const codeBugs = blockchainAttacks.filter(i => i.subcategory === 'code_bug')
   
   const html = `
     <!doctype html>
@@ -392,6 +481,20 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
             padding: 0.75rem;
             border-radius: 4px;
             border-left: 3px solid #0066cc;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: block;
+            color: inherit;
+          }
+          .stat-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background: #fafafa;
+          }
+          .stat-item.active {
+            background: #f0f7ff;
+            border-left-width: 4px;
           }
           .stat-item.blockchain_attack {
             border-left-color: #f5576c;
@@ -433,30 +536,64 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
           </div>
         </div>
         <div class="stats">
-          Found <strong>${items.length}</strong> security-related articles
+          ${categoryFilter 
+            ? `<div style="margin-bottom: 0.5rem;">
+                <a href="/" style="color: #0066cc; text-decoration: none; font-size: 0.9rem;">← Back to All</a>
+                <span style="margin: 0 0.5rem; color: #999;">|</span>
+                <span style="color: #666;">Filtered by: <strong>${getCategoryLabel(categoryFilter)}</strong></span>
+              </div>`
+            : ''
+          }
+          Found <strong>${filteredItems.length}</strong> security-related articles
+          ${categoryFilter ? ` (${allItems.length} total)` : ''}
           <div class="stats-breakdown">
-            <div class="stat-item blockchain_attack">
+            <a href="/?category=blockchain_attack" class="stat-item blockchain_attack ${categoryFilter === 'blockchain_attack' ? 'active' : ''}">
               <div class="stat-item-label">Blockchain Attacks</div>
               <div class="stat-item-count">${blockchainAttacks.length}</div>
-            </div>
-            <div class="stat-item vulnerability_disclosure">
+            </a>
+            <a href="/?category=vulnerability_disclosure" class="stat-item vulnerability_disclosure ${categoryFilter === 'vulnerability_disclosure' ? 'active' : ''}">
               <div class="stat-item-label">Vulnerability Disclosures</div>
               <div class="stat-item-count">${vulnerabilityDisclosures.length}</div>
-            </div>
-            <div class="stat-item exploit">
+            </a>
+            <a href="/?category=exploit" class="stat-item exploit ${categoryFilter === 'exploit' ? 'active' : ''}">
               <div class="stat-item-label">Exploits</div>
               <div class="stat-item-count">${exploits.length}</div>
-            </div>
-            <div class="stat-item smart_contract_bug">
+            </a>
+            <a href="/?category=smart_contract_bug" class="stat-item smart_contract_bug ${categoryFilter === 'smart_contract_bug' ? 'active' : ''}">
               <div class="stat-item-label">Smart Contract Bugs</div>
               <div class="stat-item-count">${contractBugs.length}</div>
+            </a>
+          </div>
+          <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #ddd;">
+            <div style="font-weight: 600; margin-bottom: 0.75rem; color: #333;">Blockchain Attack Breakdown:</div>
+            <div class="stats-breakdown">
+              <a href="/api/security/wallet-hacks" class="stat-item" style="border-left-color: #d32f2f;">
+                <div class="stat-item-label">💼 Wallet Hacks</div>
+                <div class="stat-item-count">${walletHacks.length}</div>
+              </a>
+              <a href="/api/security/public-chain-attacks" class="stat-item" style="border-left-color: #1976d2;">
+                <div class="stat-item-label">⛓️ Public Chain Attacks</div>
+                <div class="stat-item-count">${publicChainAttacks.length}</div>
+              </a>
+              <a href="/api/security/bridge-hacks" class="stat-item" style="border-left-color: #f57c00;">
+                <div class="stat-item-label">🌉 Bridge Hacks</div>
+                <div class="stat-item-count">${bridgeHacks.length}</div>
+              </a>
+              <a href="/api/security/stolen-funds" class="stat-item" style="border-left-color: #c2185b;">
+                <div class="stat-item-label">💰 Stolen Funds</div>
+                <div class="stat-item-count">${stolenFunds.length}</div>
+              </a>
+              <a href="/api/security/code-bugs" class="stat-item" style="border-left-color: #7b1fa2;">
+                <div class="stat-item-label">🐛 Code Bugs</div>
+                <div class="stat-item-count">${codeBugs.length}</div>
+              </a>
             </div>
           </div>
         </div>
         <div class="items-container">
-          ${items.length === 0 
-            ? '<div class="no-items"><p>No security-related articles found at this time.</p></div>'
-            : items.map(item => `
+          ${filteredItems.length === 0 
+            ? `<div class="no-items"><p>No ${categoryFilter ? getCategoryLabel(categoryFilter).toLowerCase() : 'security-related'} articles found at this time.</p></div>`
+            : filteredItems.map(item => `
               <div class="item ${item.category || ''}">
                 <div class="item-header">
                   <h2 class="item-title">
@@ -466,6 +603,7 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
                   </h2>
                   <div class="item-meta">
                     ${item.category ? `<span class="item-category-badge ${item.category}">${getCategoryLabel(item.category)}</span>` : ''}
+                    ${item.subcategory ? `<span class="item-category-badge" style="background: #e8eaf6; color: #3f51b5;">${getSubcategoryLabel(item.subcategory)}</span>` : ''}
                     <span class="feed-name">${escapeHtml(item.feedTitle)}</span>
                     ${item.pubDate ? `<span class="date">${formatDate(item.pubDate)}</span>` : ''}
                   </div>
@@ -508,6 +646,17 @@ function getCategoryLabel(category: string): string {
     'smart_contract_bug': '🟢 Smart Contract Bug',
   }
   return labels[category] || category
+}
+
+function getSubcategoryLabel(subcategory: string): string {
+  const labels: { [key: string]: string } = {
+    'wallet_hack': '💼 Wallet Hack',
+    'public_chain_attack': '⛓️ Public Chain Attack',
+    'bridge_hack': '🌉 Bridge Hack',
+    'stolen_funds': '💰 Stolen Funds',
+    'code_bug': '🐛 Code Bug',
+  }
+  return labels[subcategory] || subcategory
 }
 
 function formatDate(dateString: string): string {

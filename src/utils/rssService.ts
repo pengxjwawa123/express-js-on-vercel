@@ -15,10 +15,12 @@ export interface RSSItem {
   feedTitle: string
   feedUrl: string
   category?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
+  subcategory?: 'wallet_hack' | 'public_chain_attack' | 'bridge_hack' | 'stolen_funds' | 'code_bug' | string
 }
 
-// 区块链攻击相关关键词
+// 区块链攻击相关关键词（包括钱包、公链攻击和被盗）
 const BLOCKCHAIN_ATTACK_KEYWORDS = [
+  // 基础区块链攻击
   'blockchain attack', '区块链攻击', '51% attack', '51%攻击',
   'double spending', '双花', 'sybil attack', 'sybil攻击',
   'eclipse attack', 'eclipse攻击', 'ddos attack', 'ddos攻击',
@@ -26,7 +28,47 @@ const BLOCKCHAIN_ATTACK_KEYWORDS = [
   'consensus attack', '共识攻击', 'mining attack', '挖矿攻击',
   'hash rate', 'nonce attack', 'fork attack', '分叉攻击',
   'selfish mining', '自私挖矿', 'transaction malleability', '交易延展性',
-  'replay attack', '重放攻击', 'finney attack', 'griefing attack'
+  'replay attack', '重放攻击', 'finney attack', 'griefing attack',
+  
+  // 钱包相关
+  'wallet hack', '钱包被黑', 'wallet compromise', '钱包被入侵',
+  'wallet vulnerability', '钱包漏洞', 'wallet breach', '钱包泄露',
+  'private key leak', '私钥泄露', 'seed phrase stolen', '种子短语被盗',
+  'hardware wallet vulnerability', '硬件钱包漏洞', 'ledger vulnerability', 'ledger漏洞',
+  'metamask vulnerability', 'metamask漏洞', 'metamask hack', 'metamask被黑',
+  'trust wallet hack', 'trust wallet被黑', 'wallet draining', '钱包资金被清空',
+  'mnemonic leaked', '助记词泄露', 'key extraction', '密钥提取',
+  
+  // 公链安全事件
+  'ethereum attack', '以太坊攻击', 'ethereum hack', '以太坊被黑',
+  'ethereum vulnerability', '以太坊漏洞', 'ethereum bug', '以太坊漏洞',
+  'bitcoin attack', '比特币攻击', 'bitcoin vulnerability', '比特币漏洞',
+  'bsc attack', 'bsc被黑', 'binance chain vulnerability', '币安智能链漏洞',
+  'polygon attack', 'polygon被黑', 'polygon vulnerability', 'polygon漏洞',
+  'solana attack', 'solana被黑', 'solana vulnerability', 'solana漏洞',
+  'avalanche vulnerability', 'avalanche漏洞', 'avalanche attack', 'avalanche被黑',
+  'optimism vulnerability', 'optimism漏洞', 'arbitrum vulnerability', 'arbitrum漏洞',
+  'zkSync vulnerability', 'zkSync漏洞', 'starknet vulnerability', 'starknet漏洞',
+  'base network vulnerability', 'base chain漏洞',
+  
+  // 被盗/损失事件
+  'funds stolen', '资金被盗', 'stolen funds', '被盗资金',
+  'millions stolen', '百万资金被盗', 'millions lost', '百万资金丢失',
+  'bridge hack', '跨链桥接被黑', 'bridge exploit', '跨链桥接被利用',
+  'bridge vulnerability', '跨链桥接漏洞', 'cross chain vulnerability', '跨链漏洞',
+  'protocol hack', '协议被黑', 'protocol exploit', '协议被利用',
+  'exchange hack', '交易所被黑', 'exchange vulnerability', '交易所漏洞',
+  'dex vulnerability', 'dex漏洞', 'dex hack', 'dex被黑',
+  'liquidity pool hack', '流动性池被黑', 'flash loan attack', '闪电贷攻击',
+  'token theft', '代币被盗', 'theft', '盗窃',
+  'hacked', '被黑', 'compromised', '被入侵', 'breached', '被突破',
+  'stolen', '被盗',
+  
+  // 代码级别问题
+  'contract audit failure', '合约审计失败', 'code vulnerability', '代码漏洞',
+  'zero knowledge bug', '零知识证明漏洞', 'cryptographic flaw', '密码学缺陷',
+  'implementation bug', '实现漏洞', 'logic error', '逻辑错误',
+  'upgrade vulnerability', '升级漏洞', 'proxy vulnerability', '代理漏洞'
 ]
 
 // 漏洞披露相关关键词
@@ -63,6 +105,78 @@ const EXPLOIT_KEYWORDS = [
 
 type ItemCategory = 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug' | null
 
+// 钱包相关关键词检测
+function isWalletHack(text: string): boolean {
+  const walletKeywords = [
+    'wallet hack', '钱包被黑', 'wallet compromise', '钱包被入侵',
+    'wallet vulnerability', '钱包漏洞', 'wallet breach', '钱包泄露',
+    'private key leak', '私钥泄露', 'seed phrase stolen', '种子短语被盗',
+    'hardware wallet', '硬件钱包', 'metamask', 'trust wallet', 'ledger',
+    'mnemonic leaked', '助记词泄露', 'key extraction', '密钥提取'
+  ]
+  return walletKeywords.some(keyword => text.includes(keyword))
+}
+
+// 公链攻击相关关键词检测
+function isPublicChainAttack(text: string): boolean {
+  const chainKeywords = [
+    'ethereum', 'bitcoin', 'bsc', 'binance smart chain',
+    'polygon', 'solana', 'avalanche', 'arbitrum', 'optimism',
+    'zkSync', 'starknet', 'base network', 'base chain',
+    'layer 2', 'l2', '以太坊', '比特币', '币安',
+  ]
+  return chainKeywords.some(keyword => text.includes(keyword))
+}
+
+// 跨链桥接被黑检测
+function isBridgeHack(text: string): boolean {
+  const bridgeKeywords = [
+    'bridge hack', 'bridge exploit', 'bridge vulnerability',
+    'cross chain vulnerability', 'crosschain hack',
+    '跨链桥接', 'wormhole', 'nomad', 'ronin', 'poly network',
+    'bridge security', '桥接漏洞'
+  ]
+  return bridgeKeywords.some(keyword => text.includes(keyword))
+}
+
+// 被盗资金检测
+function isStolenFunds(text: string): boolean {
+  const stolenKeywords = [
+    'funds stolen', 'stolen funds', 'millions stolen', 'millions lost',
+    'funds lost', 'liquidity pool hack', 'flash loan attack', 'token theft',
+    'theft', 'hacked', 'compromised', 'breached', 'stolen',
+    '资金被盗', '百万', '被黑', '被入侵', '被突破', '被盗', '漏洞'
+  ]
+  // 需要组合检查，避免误判
+  return stolenKeywords.some(keyword => text.includes(keyword)) && 
+         (text.includes('hack') || text.includes('stolen') || text.includes('lost') || 
+          text.includes('被黑') || text.includes('被盗') || text.includes('丢失'))
+}
+
+// 代码级别bug检测
+function isCodeBug(text: string): boolean {
+  const codeKeywords = [
+    'code vulnerability', 'implementation bug', 'logic error',
+    'zero knowledge bug', 'cryptographic flaw', 'upgrade vulnerability',
+    'proxy vulnerability', 'contract audit', '代码漏洞', '实现漏洞',
+    '逻辑错误', '密码学', '升级'
+  ]
+  return codeKeywords.some(keyword => text.includes(keyword))
+}
+
+function getSubcategory(item: any): string | undefined {
+  const combined = `${(item.title || '').toLowerCase()} ${((item.content || item.contentSnippet || '')).toLowerCase()}`
+  
+  // 按优先级检测子分类
+  if (isBridgeHack(combined)) return 'bridge_hack'
+  if (isWalletHack(combined)) return 'wallet_hack'
+  if (isStolenFunds(combined)) return 'stolen_funds'
+  if (isPublicChainAttack(combined)) return 'public_chain_attack'
+  if (isCodeBug(combined)) return 'code_bug'
+  
+  return undefined
+}
+
 function categorizeSecurityItem(item: any): ItemCategory {
   const title = (item.title || '').toLowerCase()
   const content = ((item.content || item.contentSnippet || '')).toLowerCase()
@@ -97,6 +211,7 @@ export async function fetchRSSFeed(feed: RSSFeed): Promise<RSSItem[]> {
     for (const item of parsed.items || []) {
       if (isSecurityRelated(item)) {
         const category = categorizeSecurityItem(item)
+        const subcategory = getSubcategory(item)
         items.push({
           title: item.title || 'Untitled',
           link: item.link || feed.htmlUrl || '',
@@ -106,6 +221,7 @@ export async function fetchRSSFeed(feed: RSSFeed): Promise<RSSItem[]> {
           feedTitle: feed.title,
           feedUrl: feed.xmlUrl,
           category: category || undefined,
+          subcategory: subcategory,
         })
       }
     }
