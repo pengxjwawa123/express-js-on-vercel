@@ -584,6 +584,10 @@ function renderSecurityPage(
           Found <strong>${filteredItems.length}</strong> security-related articles
           ${categoryFilter ? ` (${allItems.length} total)` : ''}
           <div class="stats-breakdown">
+            <a href="/" class="stat-item ${!categoryFilter ? 'active' : ''}" style="border-left-color: #333;">
+              <div class="stat-item-label">All</div>
+              <div class="stat-item-count">${allItems.length}</div>
+            </a>
             <a href="/?category=blockchain_attack" class="stat-item blockchain_attack ${categoryFilter === 'blockchain_attack' ? 'active' : ''}">
               <div class="stat-item-label">Blockchain Attacks</div>
               <div class="stat-item-count">${blockchainAttacks.length}</div>
