@@ -2,7 +2,7 @@ import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { parseOPML } from './utils/opmlParser.js'
-import { fetchAllSecurityFeeds } from './utils/rssService.js'
+import { fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -70,7 +70,7 @@ app.get('/security', async (req, res) => {
     console.log(`Found ${feeds.length} RSS feeds`)
     
     // 获取所有安全相关的内容
-    const securityItems = await fetchAllSecurityFeeds(feeds)
+    const securityItems = await fetchAllSecurityFeedsWithCategory(feeds)
     
     // 更新缓存
     cachedSecurityItems = securityItems
@@ -101,7 +101,71 @@ app.get('/security', async (req, res) => {
   }
 })
 
+// API endpoint - 按分类获取安全数据
+app.get('/api/security', async (req, res) => {
+  try {
+    const category = req.query.category as any
+    const feeds = parseOPML()
+    
+    const securityItems = await fetchAllSecurityFeedsWithCategory(feeds, category)
+    
+    res.json({
+      count: securityItems.length,
+      category: category || 'all',
+      items: securityItems,
+    })
+  } catch (error) {
+    console.error('Error in /api/security:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// API endpoint - 只获取区块链攻击数据
+app.get('/api/security/blockchain-attacks', async (req, res) => {
+  try {
+    const feeds = parseOPML()
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'blockchain_attack')
+    
+    res.json({
+      count: items.length,
+      category: 'blockchain_attack',
+      items,
+    })
+  } catch (error) {
+    console.error('Error in /api/security/blockchain-attacks:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
+// API endpoint - 只获取漏洞披露数据
+app.get('/api/security/vulnerabilities', async (req, res) => {
+  try {
+    const feeds = parseOPML()
+    const items = await fetchAllSecurityFeedsWithCategory(feeds, 'vulnerability_disclosure')
+    
+    res.json({
+      count: items.length,
+      category: 'vulnerability_disclosure',
+      items,
+    })
+  } catch (error) {
+    console.error('Error in /api/security/vulnerabilities:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
 function renderSecurityPage(res: express.Response, items: any[], fromCache: boolean) {
+  const blockchainAttacks = items.filter(i => i.category === 'blockchain_attack')
+  const vulnerabilityDisclosures = items.filter(i => i.category === 'vulnerability_disclosure')
+  const exploits = items.filter(i => i.category === 'exploit')
+  const contractBugs = items.filter(i => i.category === 'smart_contract_bug')
+  
   const html = `
     <!doctype html>
     <html>
@@ -153,6 +217,46 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
             font-size: 0.85rem;
             margin-left: 1rem;
           }
+          .category-filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+          }
+          .category-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            border: none;
+          }
+          .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+          }
+          .category-card.blockchain {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+          }
+          .category-card.vulnerability {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+          }
+          .category-card.exploit {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+          }
+          .category-card.contract {
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+          }
+          .category-card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+          }
+          .category-card .count {
+            font-size: 2rem;
+            font-weight: bold;
+          }
           .items-container {
             display: grid;
             gap: 1.5rem;
@@ -163,6 +267,29 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
             border-radius: 8px;
             padding: 1.5rem;
             transition: box-shadow 0.2s;
+            position: relative;
+          }
+          .item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            border-radius: 8px 0 0 8px;
+            background: #0066cc;
+          }
+          .item.blockchain_attack::before {
+            background: #f5576c;
+          }
+          .item.vulnerability_disclosure::before {
+            background: #00f2fe;
+          }
+          .item.exploit::before {
+            background: #fee140;
+          }
+          .item.smart_contract_bug::before {
+            background: #30cfd0;
           }
           .item:hover {
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -188,6 +315,32 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
             color: #666;
             margin-bottom: 0.75rem;
           }
+          .item-category-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 0.75rem;
+            background: #f0f0f0;
+            color: #666;
+          }
+          .item-category-badge.blockchain_attack {
+            background: #fce4ec;
+            color: #c2185b;
+          }
+          .item-category-badge.vulnerability_disclosure {
+            background: #e0f7fa;
+            color: #00838f;
+          }
+          .item-category-badge.exploit {
+            background: #fff3e0;
+            color: #e65100;
+          }
+          .item-category-badge.smart_contract_bug {
+            background: #e0f2f1;
+            color: #004d40;
+          }
           .item-meta .feed-name {
             color: #0066cc;
             font-weight: 500;
@@ -198,6 +351,7 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
           .item-content {
             color: #555;
             line-height: 1.6;
+            margin-left: 12px;
           }
           .item-content p {
             margin: 0.5rem 0;
@@ -227,6 +381,40 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
             font-size: 0.9rem;
             color: #666;
           }
+          .stats-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+          }
+          .stat-item {
+            background: white;
+            padding: 0.75rem;
+            border-radius: 4px;
+            border-left: 3px solid #0066cc;
+          }
+          .stat-item.blockchain_attack {
+            border-left-color: #f5576c;
+          }
+          .stat-item.vulnerability_disclosure {
+            border-left-color: #00f2fe;
+          }
+          .stat-item.exploit {
+            border-left-color: #fee140;
+          }
+          .stat-item.smart_contract_bug {
+            border-left-color: #30cfd0;
+          }
+          .stat-item-label {
+            font-size: 0.75rem;
+            color: #999;
+            text-transform: uppercase;
+          }
+          .stat-item-count {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+          }
         </style>
       </head>
       <body>
@@ -246,12 +434,30 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
         </div>
         <div class="stats">
           Found <strong>${items.length}</strong> security-related articles
+          <div class="stats-breakdown">
+            <div class="stat-item blockchain_attack">
+              <div class="stat-item-label">Blockchain Attacks</div>
+              <div class="stat-item-count">${blockchainAttacks.length}</div>
+            </div>
+            <div class="stat-item vulnerability_disclosure">
+              <div class="stat-item-label">Vulnerability Disclosures</div>
+              <div class="stat-item-count">${vulnerabilityDisclosures.length}</div>
+            </div>
+            <div class="stat-item exploit">
+              <div class="stat-item-label">Exploits</div>
+              <div class="stat-item-count">${exploits.length}</div>
+            </div>
+            <div class="stat-item smart_contract_bug">
+              <div class="stat-item-label">Smart Contract Bugs</div>
+              <div class="stat-item-count">${contractBugs.length}</div>
+            </div>
+          </div>
         </div>
         <div class="items-container">
           ${items.length === 0 
             ? '<div class="no-items"><p>No security-related articles found at this time.</p></div>'
             : items.map(item => `
-              <div class="item">
+              <div class="item ${item.category || ''}">
                 <div class="item-header">
                   <h2 class="item-title">
                     <a href="${item.link}" target="_blank" rel="noopener noreferrer">
@@ -259,6 +465,7 @@ function renderSecurityPage(res: express.Response, items: any[], fromCache: bool
                     </a>
                   </h2>
                   <div class="item-meta">
+                    ${item.category ? `<span class="item-category-badge ${item.category}">${getCategoryLabel(item.category)}</span>` : ''}
                     <span class="feed-name">${escapeHtml(item.feedTitle)}</span>
                     ${item.pubDate ? `<span class="date">${formatDate(item.pubDate)}</span>` : ''}
                   </div>
@@ -291,6 +498,16 @@ function escapeHtml(text: string): string {
     "'": '&#039;',
   }
   return text.replace(/[&<>"']/g, m => map[m])
+}
+
+function getCategoryLabel(category: string): string {
+  const labels: { [key: string]: string } = {
+    'blockchain_attack': '🔴 Blockchain Attack',
+    'vulnerability_disclosure': '🔵 Vulnerability Disclosure',
+    'exploit': '🟡 Exploit',
+    'smart_contract_bug': '🟢 Smart Contract Bug',
+  }
+  return labels[category] || category
 }
 
 function formatDate(dateString: string): string {
