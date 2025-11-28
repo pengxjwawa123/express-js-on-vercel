@@ -237,6 +237,139 @@ export async function fetchAllSecurityFeeds(feeds: RSSFeed[]): Promise<RSSItem[]
   return fetchAllSecurityFeedsWithCategory(feeds)
 }
 
+// 计算字符串相似度（简单的 Levenshtein 距离归一化）
+function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().trim()
+  const s2 = str2.toLowerCase().trim()
+  
+  if (s1 === s2) return 1.0
+  if (s1.length === 0 || s2.length === 0) return 0.0
+  
+  // 如果一个是另一个的子串，给予较高相似度
+  if (s1.includes(s2) || s2.includes(s1)) {
+    return Math.min(s1.length, s2.length) / Math.max(s1.length, s2.length)
+  }
+  
+  // 简单的单词重叠度
+  const words1 = new Set(s1.split(/\s+/))
+  const words2 = new Set(s2.split(/\s+/))
+  const intersection = new Set([...words1].filter(x => words2.has(x)))
+  const union = new Set([...words1, ...words2])
+  
+  return intersection.size / union.size
+}
+
+// 标准化 URL（移除查询参数、锚点等）
+function normalizeUrl(url: string): string {
+  try {
+    const urlObj = new URL(url)
+    return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`.toLowerCase()
+  } catch {
+    return url.toLowerCase()
+  }
+}
+
+// 去重函数
+function deduplicateItems(items: RSSItem[]): RSSItem[] {
+  if (items.length === 0) return items
+  
+  const linkMap = new Map<string, RSSItem>() // 按链接索引
+  const titleMap = new Map<string, RSSItem>() // 按标准化标题索引
+  
+  for (const item of items) {
+    // 1. 首先按链接去重（标准化 URL）
+    const normalizedLink = normalizeUrl(item.link)
+    
+    if (normalizedLink && linkMap.has(normalizedLink)) {
+      // 如果链接相同，保留发布日期更早的（通常是原始来源）
+      const existing = linkMap.get(normalizedLink)!
+      const itemDate = item.pubDate ? new Date(item.pubDate).getTime() : 0
+      const existingDate = existing.pubDate ? new Date(existing.pubDate).getTime() : 0
+      
+      if (itemDate > 0 && (existingDate === 0 || itemDate < existingDate)) {
+        // 替换为更早的版本
+        linkMap.set(normalizedLink, item)
+        // 同时更新标题索引
+        const normalizedTitle = item.title.toLowerCase().trim()
+        if (normalizedTitle) {
+          titleMap.set(normalizedTitle, item)
+        }
+      }
+      continue
+    }
+    
+    // 2. 检查标题相似度（避免同一篇文章的不同来源）
+    const normalizedTitle = item.title.toLowerCase().trim()
+    let isDuplicate = false
+    
+    if (normalizedTitle) {
+      // 检查完全相同的标题
+      if (titleMap.has(normalizedTitle)) {
+        const existing = titleMap.get(normalizedTitle)!
+        const existingLink = normalizeUrl(existing.link)
+        
+        // 如果链接也相同，已经在第一步处理了，跳过
+        if (normalizedLink && normalizedLink === existingLink) {
+          continue
+        }
+        
+        // 标题相同但链接不同，保留发布日期更早的
+        const itemDate = item.pubDate ? new Date(item.pubDate).getTime() : 0
+        const existingDate = existing.pubDate ? new Date(existing.pubDate).getTime() : 0
+        
+        if (itemDate > 0 && (existingDate === 0 || itemDate < existingDate)) {
+          // 替换为更早的版本
+          linkMap.delete(existingLink)
+          linkMap.set(normalizedLink || existingLink, item)
+          titleMap.set(normalizedTitle, item)
+        }
+        isDuplicate = true
+      } else {
+        // 检查相似标题（相似度 > 0.85）
+        for (const [existingTitle, existing] of titleMap.entries()) {
+          const similarity = calculateSimilarity(normalizedTitle, existingTitle)
+          
+          if (similarity > 0.85) {
+            const existingLink = normalizeUrl(existing.link)
+            
+            // 如果链接也相同，已经在第一步处理了，跳过
+            if (normalizedLink && normalizedLink === existingLink) {
+              isDuplicate = true
+              break
+            }
+            
+            // 保留发布日期更早的
+            const itemDate = item.pubDate ? new Date(item.pubDate).getTime() : 0
+            const existingDate = existing.pubDate ? new Date(existing.pubDate).getTime() : 0
+            
+            if (itemDate > 0 && (existingDate === 0 || itemDate < existingDate)) {
+              // 替换为更早的版本
+              linkMap.delete(existingLink)
+              linkMap.set(normalizedLink || existingLink, item)
+              titleMap.delete(existingTitle)
+              titleMap.set(normalizedTitle, item)
+            }
+            isDuplicate = true
+            break
+          }
+        }
+      }
+    }
+    
+    if (!isDuplicate) {
+      if (normalizedLink) {
+        linkMap.set(normalizedLink, item)
+      }
+      if (normalizedTitle) {
+        titleMap.set(normalizedTitle, item)
+      }
+    }
+  }
+  
+  // 返回去重后的结果
+  return Array.from(linkMap.values())
+}
+
 export async function fetchAllSecurityFeedsWithCategory(
   feeds: RSSFeed[],
   categoryFilter?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
@@ -256,10 +389,15 @@ export async function fetchAllSecurityFeedsWithCategory(
     })
   }
   
+  // 去重处理
+  console.log(`Before deduplication: ${allItems.length} items`)
+  const deduplicatedItems = deduplicateItems(allItems)
+  console.log(`After deduplication: ${deduplicatedItems.length} items (removed ${allItems.length - deduplicatedItems.length} duplicates)`)
+  
   // 按分类筛选（如果指定）
-  let filteredItems = allItems
+  let filteredItems = deduplicatedItems
   if (categoryFilter) {
-    filteredItems = allItems.filter(item => item.category === categoryFilter)
+    filteredItems = deduplicatedItems.filter(item => item.category === categoryFilter)
   }
   
   // 按发布日期排序（最新的在前）
