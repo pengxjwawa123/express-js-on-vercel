@@ -2,8 +2,8 @@ import Parser from 'rss-parser'
 import { RSSFeed } from './opmlParser.js'
 
 const parser = new Parser({
-  timeout: 10000,
-  maxRedirects: 5,
+  timeout: 5000, // 减少超时时间，快速失败
+  maxRedirects: 3, // 减少重定向次数
 })
 
 export interface RSSItem {
@@ -377,15 +377,21 @@ export async function fetchAllSecurityFeedsWithCategory(
   const allItems: RSSItem[] = []
   
   // 并发获取，但限制并发数以避免过载
-  const batchSize = 10
+  // 减少批量大小，加快处理速度
+  const batchSize = 20
   for (let i = 0; i < feeds.length; i += batchSize) {
     const batch = feeds.slice(i, i + batchSize)
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       batch.map(feed => fetchRSSFeed(feed))
     )
     
-    results.forEach(items => {
-      allItems.push(...items)
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        allItems.push(...result.value)
+      } else {
+        // 静默处理失败，不阻塞其他请求
+        console.warn(`Failed to fetch feed ${batch[index]?.title}:`, result.reason?.message || 'Unknown error')
+      }
     })
   }
   

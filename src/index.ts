@@ -15,7 +15,32 @@ app.use(express.static(path.join(__dirname, '..', 'public')))
 // 缓存安全相关的 RSS 内容
 let cachedSecurityItems: any[] = []
 let lastCacheTime = 0
-const CACHE_DURATION = 30 * 60 * 1000 // 30分钟缓存
+let isUpdating = false // 防止并发更新
+const CACHE_DURATION = 2 * 60 * 60 * 1000 // 2小时缓存
+const BACKGROUND_UPDATE_INTERVAL = 30 * 60 * 1000 // 30分钟后台更新一次
+
+// 后台更新缓存（异步，不阻塞请求）
+async function updateCacheInBackground() {
+  if (isUpdating) {
+    console.log('Cache update already in progress, skipping...')
+    return
+  }
+  
+  isUpdating = true
+  try {
+    console.log('Starting background cache update...')
+    const feeds = parseOPML()
+    const securityItems = await fetchAllSecurityFeeds(feeds)
+    
+    cachedSecurityItems = securityItems
+    lastCacheTime = Date.now()
+    console.log(`Cache updated successfully: ${securityItems.length} items`)
+  } catch (error) {
+    console.error('Error updating cache in background:', error)
+  } finally {
+    isUpdating = false
+  }
+}
 
 // 共享的安全内容处理函数
 async function handleSecurityFeed(req: express.Request, res: express.Response) {
@@ -27,18 +52,39 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
       : undefined
     
     const now = Date.now()
+    const cacheAge = now - lastCacheTime
+    const isCacheValid = cachedSecurityItems.length > 0 && cacheAge < CACHE_DURATION
+    const needsBackgroundUpdate = cacheAge > BACKGROUND_UPDATE_INTERVAL
     
-    // 检查缓存是否有效
-    if (cachedSecurityItems.length > 0 && (now - lastCacheTime) < CACHE_DURATION) {
-      // 如果有缓存，直接使用缓存数据（筛选在渲染时进行）
+    // 如果有有效缓存，立即返回
+    if (isCacheValid) {
+      // 如果缓存较旧，在后台更新（不阻塞响应）
+      if (needsBackgroundUpdate && !isUpdating) {
+        updateCacheInBackground().catch(err => 
+          console.error('Background update failed:', err)
+        )
+      }
       return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter)
     }
     
-    // 解析 OPML 并获取所有 feeds
+    // 如果缓存过期但有旧数据，先返回旧数据，后台更新
+    if (cachedSecurityItems.length > 0) {
+      console.log('Cache expired, returning stale data and updating in background...')
+      // 后台更新（不等待）
+      if (!isUpdating) {
+        updateCacheInBackground().catch(err => 
+          console.error('Background update failed:', err)
+        )
+      }
+      // 立即返回旧数据
+      return renderSecurityPage(res, cachedSecurityItems, true, categoryFilter)
+    }
+    
+    // 如果没有缓存，必须等待数据加载（首次访问）
+    console.log('No cache available, fetching data...')
     const feeds = parseOPML()
     console.log(`Found ${feeds.length} RSS feeds`)
     
-    // 总是获取所有数据并缓存（筛选在渲染时进行）
     const securityItems = await fetchAllSecurityFeeds(feeds)
     
     // 更新缓存
@@ -48,6 +94,18 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     renderSecurityPage(res, securityItems, false, categoryFilter)
   } catch (error) {
     console.error('Error fetching security feeds:', error)
+    
+    // 即使出错，如果有旧缓存，也返回旧数据
+    if (cachedSecurityItems.length > 0) {
+      console.log('Error occurred, returning stale cache data...')
+      const category = req.query.category as string | undefined
+      const validCategories = ['blockchain_attack', 'vulnerability_disclosure', 'exploit', 'smart_contract_bug']
+      const fallbackCategoryFilter = category && validCategories.includes(category) 
+        ? category as 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
+        : undefined
+      return renderSecurityPage(res, cachedSecurityItems, true, fallbackCategoryFilter)
+    }
+    
     res.status(500).type('html').send(`
       <!doctype html>
       <html>
