@@ -1,6 +1,7 @@
 import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import cron from 'node-cron'
 import { parseOPML } from './utils/opmlParser.js'
 import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
 import { sendTelegramMessages } from './utils/telegramBot.js'
@@ -754,6 +755,18 @@ function formatDate(dateString: string): string {
 app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+
+// 设置定时任务：每30分钟自动更新并推送
+console.log('Setting up scheduled task: update and push every 30 minutes...')
+
+// 每30分钟执行一次（在每小时的第0分钟和第30分钟）
+cron.schedule('*/30 * * * *', async () => {
+  console.log('Scheduled task triggered: updating cache and pushing to Telegram...')
+  await updateCacheInBackground()
+})
+
+// 启动时立即执行一次（可选，用于初始化）
+// updateCacheInBackground().catch(err => console.error('Initial update failed:', err))
 
 // 手动触发 Telegram 推送
 app.get('/api/telegram/push', async (req, res) => {
