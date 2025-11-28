@@ -471,8 +471,8 @@
 		<outline text="Mysterium" title="Mysterium" description="" type="rss" version="RSS" htmlUrl="https://github.com/mysteriumnetwork/node/releases" xmlUrl="https://github.com/MysteriumNetwork/node/releases.atom"/>
 		<outline text="NEAR Core" title="NEAR Core" description="" type="rss" version="RSS" htmlUrl="https://github.com/near/nearcore/releases" xmlUrl="https://github.com/near/nearcore/releases.atom"/>
 		<outline text="Nethermind" title="Nethermind" description="" type="rss" version="RSS" htmlUrl="https://github.com/NethermindEth/nethermind/releases" xmlUrl="https://github.com/NethermindEth/nethermind/releases.atom"/>
-		<outline text="Nimbus-eth1" title="Nimbus-eth1" description="" type="rss" version="RSS" htmlUrl="https://github.com/status-im/nimbus-eth1/releases" xmlUrl="https://github.com/status-im/nimbus-eth1/releases.atom"/>
-		<outline text="Nimbus-eth2" title="Nimbus-eth2" description="" type="rss" version="RSS" htmlUrl="https://github.com/status-im/nimbus-eth2/releases" xmlUrl="https://github.com/status-im/nimbus-eth2/releases.atom"/>
+
+
 		<outline text="NXTP" title="NXTP" description="" type="rss" version="RSS" htmlUrl="https://github.com/connext/nxtp/releases" xmlUrl="https://github.com/connext/nxtp/releases.atom"/>
 		<outline text="NYM" title="NYM" description="" type="rss" version="RSS" htmlUrl="https://github.com/nymtech/nym/releases" xmlUrl="https://github.com/nymtech/nym/releases.atom"/>
 		<outline text="Oasis-core" title="Oasis-core" description="" type="rss" version="RSS" htmlUrl="https://github.com/oasisprotocol/oasis-core/releases" xmlUrl="https://github.com/oasisprotocol/oasis-core/releases.atom"/>
