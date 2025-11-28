@@ -306,13 +306,6 @@ function renderSecurityPage(
   const exploits = allItems.filter(i => i.category === 'exploit')
   const contractBugs = allItems.filter(i => i.category === 'smart_contract_bug')
   
-  // 统计子分类的数量
-  const walletHacks = blockchainAttacks.filter(i => i.subcategory === 'wallet_hack')
-  const publicChainAttacks = blockchainAttacks.filter(i => i.subcategory === 'public_chain_attack')
-  const bridgeHacks = blockchainAttacks.filter(i => i.subcategory === 'bridge_hack')
-  const stolenFunds = blockchainAttacks.filter(i => i.subcategory === 'stolen_funds')
-  const codeBugs = blockchainAttacks.filter(i => i.subcategory === 'code_bug')
-  
   const html = `
     <!doctype html>
     <html>
