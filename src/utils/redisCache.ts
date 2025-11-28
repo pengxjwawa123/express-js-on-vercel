@@ -12,7 +12,7 @@ export async function initRedis(): Promise<RedisClientType | null> {
     }
 
     // 从环境变量获取Redis配置，如果没有则使用本地默认值
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+    const redisUrl = process.env.REDIS_URL || 'redis://default:cTQLM83DSLaZY4xn1dKeqomfHV1NI3n5@redis-17471.c278.us-east-1-4.ec2.cloud.redislabs.com:17471'
     
     redisClient = createClient({
       url: redisUrl,
@@ -67,7 +67,7 @@ export async function getCacheValue(key: string): Promise<string | null> {
       return null
     }
     const value = await redisClient.get(key)
-    return value
+    return value as string | null
   } catch (error) {
     console.error(`Error getting cache for key ${key}:`, error)
     return null
