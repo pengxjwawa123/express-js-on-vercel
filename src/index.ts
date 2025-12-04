@@ -837,8 +837,8 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 // 手动触发 Telegram 推送
 app.get('/api/telegram/push', async (req, res) => {
   try {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-    const chatId = process.env.TELEGRAM_CHAT_ID || '1002807276621'
+    const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
+    const chatId = '-1002807276621'
 
     console.log('Manual Telegram push triggered...')
     
