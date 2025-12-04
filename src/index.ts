@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import cron from 'node-cron'
 import { parseOPML } from './utils/opmlParser.js'
 import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
-import { sendTelegramMessages } from './utils/telegramBot.js'
+import { sendTelegramMessages, forwardTelegramMessage, extractMessageInfoFromUpdate } from './utils/telegramBot.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -13,6 +13,9 @@ const app = express()
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, '..', 'public')))
+
+// 解析 JSON body（用于接收 Telegram webhook 更新）
+app.use(express.json())
 
 // 缓存安全相关的 RSS 内容
 let cachedSecurityItems: any[] = []
@@ -213,6 +216,44 @@ app.get('/api-data', (req, res) => {
 
 // Web3 Security RSS Feed
 app.get('/security', handleSecurityFeed)
+
+// Telegram webhook endpoint - 接收来自 Telegram 的 update 并转发到工作群
+app.post('/api/telegram/webhook', async (req, res) => {
+  try {
+    // 可选的 webhook secret 验证
+    const secret = process.env.TELEGRAM_WEBHOOK_SECRET
+    if (secret) {
+      const header = req.headers['x-telegram-bot-api-secret-token'] as string | undefined
+      if (header !== secret) {
+        return res.status(401).send('Unauthorized')
+      }
+    }
+
+    const update = req.body
+    const info = extractMessageInfoFromUpdate(update)
+    if (!info) {
+      return res.status(400).json({ success: false, error: 'No message in update' })
+    }
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
+    const forwardChatId = process.env.TELEGRAM_FORWARD_CHAT_ID || '-4999471512'
+
+    // 不要无限转发自己发出的消息：如果来自目标群，忽略
+    if (info.fromChatId && String(info.fromChatId) === String(forwardChatId)) {
+      console.log('Received message from forward target, ignoring to avoid loops')
+      return res.status(200).json({ success: true, ignored: true })
+    }
+
+    const forwarded = await forwardTelegramMessage(botToken, info.fromChatId, info.messageId, forwardChatId)
+    if (forwarded) {
+      return res.status(200).json({ success: true })
+    }
+    return res.status(500).json({ success: false, error: 'Forward failed' })
+  } catch (error) {
+    console.error('Error in telegram webhook:', error)
+    return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
 
 // API endpoint - 按分类获取安全数据
 app.get('/api/security', async (req, res) => {

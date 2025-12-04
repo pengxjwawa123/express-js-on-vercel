@@ -7,6 +7,51 @@ export interface TelegramMessage {
   disable_web_page_preview?: boolean
 }
 
+// 转发单条 Telegram 消息 到指定 chatId
+export async function forwardTelegramMessage(
+  botToken: string,
+  fromChatId: string | number,
+  messageId: number,
+  toChatId: string | number
+): Promise<boolean> {
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/forwardMessage`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: toChatId,
+        from_chat_id: fromChatId,
+        message_id: messageId,
+      }),
+    })
+
+    const result = await response.json()
+    if (result.ok) {
+      console.log('Message forwarded to', toChatId)
+      return true
+    }
+    console.error('Failed to forward message:', result)
+    return false
+  } catch (error) {
+    console.error('Error forwarding Telegram message:', error)
+    return false
+  }
+}
+
+// 从 Telegram update 对象中提取 message 信息（兼容 message / edited_message / channel_post）
+export function extractMessageInfoFromUpdate(update: any) {
+  const msg = update?.message || update?.edited_message || update?.channel_post || update?.edited_channel_post
+  if (!msg) return null
+  return {
+    fromChatId: msg.chat?.id,
+    messageId: msg.message_id,
+    text: msg.text || msg.caption || '',
+    fromUser: msg.from || null,
+  }
+}
+
+
 // 发送消息到 Telegram Bot
 export async function sendTelegramMessage(
   botToken: string,
@@ -105,7 +150,26 @@ export function formatSecurityDataForTelegram(
         
         lines.push(`${index + 1}. <b>${title}</b>`)
         lines.push(`   📅 ${date}`)
-        lines.push(`   🔗 <a href="${item.link}">查看详情</a>`)
+
+        // 验证链接有效性，避免占位链接或空链接被发送
+        const isValidUrl = (s: string | undefined) => {
+          if (!s) return false
+          try {
+            const u = new URL(s)
+            return (u.protocol === 'http:' || u.protocol === 'https:') && !/example\.com/.test(u.host)
+          } catch {
+            return false
+          }
+        }
+
+        const safeLink = isValidUrl(item.link)
+          ? item.link
+          : (isValidUrl(item.feedHtml) ? item.feedHtml : (isValidUrl(item.feedUrl) ? item.feedUrl : null))
+        if (safeLink) {
+          lines.push(`   🔗 <a href="${safeLink}">查看详情</a>`)
+        } else {
+          lines.push(`   🔗 链接不可用`)
+        }
         lines.push('')
       })
 
@@ -142,6 +206,12 @@ export async function sendTelegramMessages(
       try {
         const { optimizeSecurityDataWithOpenAI } = await import('./openaiOptimizer.js')
         fullMessage = await optimizeSecurityDataWithOpenAI(items, timeRange)
+
+        // 如果模型返回了占位链接（例如 example.com），说明输出不可靠，回退为默认格式
+        if (/example\.com/.test(fullMessage)) {
+          console.warn('Optimized message contains placeholder links (example.com); falling back to default formatting')
+          fullMessage = formatSecurityDataForTelegram(items, timeRange)
+        }
       } catch (error) {
         console.error('DeepSeek optimization failed, using default format:', error)
         fullMessage = formatSecurityDataForTelegram(items, timeRange)

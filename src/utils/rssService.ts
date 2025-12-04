@@ -14,6 +14,7 @@ export interface RSSItem {
   pubDate?: string
   feedTitle: string
   feedUrl: string
+  feedHtml?: string
   category?: 'blockchain_attack' | 'vulnerability_disclosure' | 'exploit' | 'smart_contract_bug'
   subcategory?: 'wallet_hack' | 'public_chain_attack' | 'bridge_hack' | 'stolen_funds' | 'code_bug' | string
 }
@@ -212,14 +213,18 @@ export async function fetchRSSFeed(feed: RSSFeed): Promise<RSSItem[]> {
       if (isSecurityRelated(item)) {
         const category = categorizeSecurityItem(item)
         const subcategory = getSubcategory(item)
+        // 选择最合适的文章链接：优先使用 item.link / guid / enclosure.url，然后 OPML 提供的 htmlUrl，再 fallback 到 feed.xmlUrl
+        const articleLink = item.link || item.guid || (item.enclosure && item.enclosure.url) || feed.htmlUrl || feed.xmlUrl || ''
+
         items.push({
           title: item.title || 'Untitled',
-          link: item.link || feed.htmlUrl || '',
+          link: articleLink,
           content: item.content,
           contentSnippet: item.contentSnippet,
           pubDate: item.pubDate,
           feedTitle: feed.title,
           feedUrl: feed.xmlUrl,
+          feedHtml: feed.htmlUrl,
           category: category || undefined,
           subcategory: subcategory,
         })
