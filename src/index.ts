@@ -29,7 +29,7 @@ const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
 // 推送到 Telegram Bot
 async function pushToTelegramBot(newItems: any[], timeRange: string) {
   const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-  const chatId = '-4999471512'
+  const chatId ='-1002807276621'
 
   try {
     if (newItems.length === 0) {
@@ -236,7 +236,7 @@ app.post('/api/telegram/webhook', async (req, res) => {
     }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN || '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-    const forwardChatId = process.env.TELEGRAM_FORWARD_CHAT_ID || '-4999471512'
+    const forwardChatId = '-1002807276621'
 
     // 不要无限转发自己发出的消息：如果来自目标群，忽略
     if (info.fromChatId && String(info.fromChatId) === String(forwardChatId)) {
@@ -837,8 +837,8 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 // 手动触发 Telegram 推送
 app.get('/api/telegram/push', async (req, res) => {
   try {
-    const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-    const chatId = '-4999471512'
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
+    const chatId = process.env.TELEGRAM_CHAT_ID || '1002807276621'
 
     console.log('Manual Telegram push triggered...')
     
