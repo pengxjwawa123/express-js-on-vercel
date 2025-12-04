@@ -80,6 +80,32 @@ ${itemsSummary}
     
     if (result.choices && result.choices[0] && result.choices[0].message) {
       let optimizedContent = result.choices[0].message.content.trim()
+      // 如果模型在输出中使用了 example.com 或占位链接，替换为原始 items 中的真实链接（按顺序匹配），
+      // 但不要在末尾附加原始链接清单。
+      const validLinks = items.slice(0, 20).map(it => it.link || '').filter(Boolean)
+      if (validLinks.length > 0) {
+        // 1) 替换 href 中的 example.com 链接
+        let linkIndex = 0
+        optimizedContent = optimizedContent.replace(/href\s*=\s*"([^"]*example\.com[^"]*)"/gi, (_m, _p1) => {
+          const replacement = validLinks[linkIndex++] || ''
+          if (replacement) return `href="${replacement.replace(/"/g, '%22')}"`
+          return 'href="#"'
+        })
+
+        // 2) 替换裸露的 example.com URL（例如 https://example.com/...）为 HTML 链接
+        optimizedContent = optimizedContent.replace(/https?:\/\/(?:www\.)?example\.com\/?\S*/gi, () => {
+          const replacement = validLinks.shift() || ''
+          if (replacement) {
+            const safeUrl = replacement.replace(/"/g, '%22')
+            return `<a href="${safeUrl}">${safeUrl}</a>`
+          }
+          return '链接不可用'
+        })
+      } else {
+        // 如果没有可用链接，移除明显的 example.com 文本，避免发送占位链接
+        optimizedContent = optimizedContent.replace(/https?:\/\/(?:www\.)?example\.com\/?\S*/gi, '链接不可用')
+        optimizedContent = optimizedContent.replace(/example\.com/gi, '链接不可用')
+      }
       console.log('DeepSeek optimization completed successfully')
 
       // 不再保留或附加原始信息：直接返回模型生成的优化内容
