@@ -756,14 +756,39 @@ app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// 设置定时任务：每30分钟自动更新并推送
-console.log('Setting up scheduled task: update and push every 30 minutes...')
+// Vercel Cron Job endpoint - 每30分钟被 Vercel 自动调用
+app.get('/api/cron/update-cache', async (req, res) => {
+  // 验证请求来自 Vercel Cron（可选，但推荐）
+  const authHeader = req.headers.authorization
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
 
-// 每30分钟执行一次（在每小时的第0分钟和第30分钟）
-cron.schedule('*/30 * * * *', async () => {
-  console.log('Scheduled task triggered: updating cache and pushing to Telegram...')
-  await updateCacheInBackground()
+  try {
+    console.log('Cron job triggered: updating cache and pushing to Telegram...')
+    await updateCacheInBackground()
+    res.status(200).json({ 
+      success: true, 
+      message: 'Cache updated and pushed to Telegram',
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Cron job failed:', error)
+    res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    })
+  }
 })
+
+// 本地开发时的定时任务（仅在非 serverless 环境中运行）
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  console.log('Setting up local scheduled task: update and push every 30 minutes...')
+  cron.schedule('*/30 * * * *', async () => {
+    console.log('Local scheduled task triggered: updating cache and pushing to Telegram...')
+    await updateCacheInBackground()
+  })
+}
 
 // 启动时立即执行一次（可选，用于初始化）
 // updateCacheInBackground().catch(err => console.error('Initial update failed:', err))
