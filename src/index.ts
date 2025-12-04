@@ -26,7 +26,7 @@ const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
 // 推送到 Telegram Bot
 async function pushToTelegramBot(newItems: any[], timeRange: string) {
   const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-  const chatId = '7715712244'
+  const chatId = '-4999471512'
 
   try {
     if (newItems.length === 0) {
@@ -797,7 +797,7 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 app.get('/api/telegram/push', async (req, res) => {
   try {
     const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-    const chatId = '7715712244'
+    const chatId = '-4999471512'
 
     console.log('Manual Telegram push triggered...')
     
