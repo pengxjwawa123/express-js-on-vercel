@@ -207,11 +207,7 @@ export async function sendTelegramMessages(
         const { optimizeSecurityDataWithOpenAI } = await import('./openaiOptimizer.js')
         fullMessage = await optimizeSecurityDataWithOpenAI(items, timeRange)
 
-        // 如果模型返回了占位链接（例如 example.com），说明输出不可靠，回退为默认格式
-        if (/example\.com/.test(fullMessage)) {
-          console.warn('Optimized message contains placeholder links (example.com); falling back to default formatting')
-          fullMessage = formatSecurityDataForTelegram(items, timeRange)
-        }
+        // 保留模型返回的内容（假设 openaiOptimizer 已确保占位符 [[LINK_n]] 将被替换为原始链接）
       } catch (error) {
         console.error('DeepSeek optimization failed, using default format:', error)
         fullMessage = formatSecurityDataForTelegram(items, timeRange)
