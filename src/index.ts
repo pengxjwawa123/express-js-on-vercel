@@ -29,7 +29,7 @@ const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
 // 推送到 Telegram Bot
 async function pushToTelegramBot(newItems: any[], timeRange: string) {
   const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-  const chatId ='-1002807276621'
+  const chatIds = ['-1002807276621', '7715712244']
 
   try {
     if (newItems.length === 0) {
@@ -37,14 +37,19 @@ async function pushToTelegramBot(newItems: any[], timeRange: string) {
       return
     }
 
-    console.log(`Pushing ${newItems.length} new items to Telegram...`)
-    const success = await sendTelegramMessages(botToken, chatId, newItems, timeRange)
-    
-    if (success) {
-      lastTelegramPushTime = Date.now()
-      console.log('Telegram push completed successfully')
-    } else {
-      console.error('Failed to push to Telegram')
+    console.log(`Pushing ${newItems.length} new items to Telegram to ${chatIds.length} targets...`)
+    for (const cid of chatIds) {
+      try {
+        const success = await sendTelegramMessages(botToken, cid, newItems, timeRange)
+        if (success) {
+          lastTelegramPushTime = Date.now()
+          console.log(`Telegram push to ${cid} completed successfully`)
+        } else {
+          console.error(`Failed to push to Telegram chat ${cid}`)
+        }
+      } catch (err) {
+        console.error(`Error pushing to Telegram chat ${cid}:`, err)
+      }
     }
   } catch (error) {
     console.error('Error pushing to Telegram Bot:', error)
@@ -838,7 +843,7 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 app.get('/api/telegram/push', async (req, res) => {
   try {
     const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-    const chatId = '-1002807276621'
+    const chatIds = ['-1002807276621', '7715712244']
 
     console.log('Manual Telegram push triggered...')
     
@@ -867,21 +872,25 @@ app.get('/api/telegram/push', async (req, res) => {
     
     // 推送到 Telegram
     const { sendTelegramMessages } = await import('./utils/telegramBot.js')
-    const success = await sendTelegramMessages(botToken, chatId, itemsToPush, timeRange)
-    
-    if (success) {
+    const results: { chatId: string, success: boolean }[] = []
+    for (const cid of chatIds) {
+      try {
+        const ok = await sendTelegramMessages(botToken, cid, itemsToPush, timeRange)
+        results.push({ chatId: cid, success: ok })
+        if (ok) console.log(`Manual push sent to ${cid}`)
+        else console.error(`Manual push failed for ${cid}`)
+      } catch (err) {
+        console.error(`Error sending manual push to ${cid}:`, err)
+        results.push({ chatId: cid, success: false })
+      }
+    }
+
+    const anySuccess = results.some(r => r.success)
+    if (anySuccess) {
       lastTelegramPushTime = now
-      res.json({
-        success: true,
-        message: 'Telegram push sent successfully',
-        itemsCount: itemsToPush.length,
-        timeRange: timeRange
-      })
+      res.json({ success: true, results, itemsCount: itemsToPush.length, timeRange })
     } else {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to send Telegram message'
-      })
+      res.status(500).json({ success: false, results, error: 'Failed to send Telegram messages to all targets' })
     }
   } catch (error) {
     console.error('Error in manual Telegram push:', error)

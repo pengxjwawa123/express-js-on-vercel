@@ -147,8 +147,9 @@ export function formatSecurityDataForTelegram(
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
-        
+
         lines.push(`${index + 1}. <b>${title}</b>`)
+
         lines.push(`   📅 ${date}`)
 
         // 验证链接有效性，避免占位链接或空链接被发送
