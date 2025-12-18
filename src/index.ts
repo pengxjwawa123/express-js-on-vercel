@@ -30,7 +30,7 @@ const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
 // 推送到 Telegram Bot（带 Redis 去重）
 async function pushToTelegramBot(newItems: any[], timeRange: string) {
   const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-  const chatIds = ['7715712244']
+  const chatIds = ['-1002807276621', '7715712244']
 
   try {
     if (newItems.length === 0) {

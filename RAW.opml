@@ -58,7 +58,6 @@
 		<outline text="Opera Desktop" title="Opera Desktop" description="" type="rss" version="RSS" htmlUrl="https://blogs.opera.com/desktop" xmlUrl="https://blogs.opera.com/desktop/feed/"/>
 		<outline text="Opera Mobile" title="Opera Mobile" description="" type="rss" version="RSS" htmlUrl="https://blogs.opera.com/mobile" xmlUrl="https://blogs.opera.com/mobile/feed/"/>
 	<outline text="05. Research/VC" title="05. Research/VC">
-		<outline text="BTC Study (Chinese)" title="BTC Study (Chinese)" description="" type="rss" version="RSS" htmlUrl="" xmlUrl="https://www.btcstudy.org/atom.xml"/>
 		<outline text="Chainalysis" title="Chainalysis" description="" type="rss" version="RSS" htmlUrl="https://blog.chainalysis.com/" xmlUrl="https://blog.chainalysis.com/feed/"/>
 		<outline text="Dappfort Blog" title="Dappfort Blog" description="" type="rss" version="RSS" htmlUrl="https://dappfort.com/blog" xmlUrl="https://dappfort.com/blog/feed"/>
 		<outline text="Elliptic Blog" title="Elliptic Blog" description="" type="rss" version="RSS" htmlUrl="https://www.elliptic.co/blog" xmlUrl="https://www.elliptic.co/blog/rss.xml"/>
