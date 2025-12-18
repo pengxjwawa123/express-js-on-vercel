@@ -7,7 +7,6 @@
 <body>
 	<outline text="01. Project Updates" title="01. Project Updates">
 		<outline text="Alchemy Blog" title="Alchemy Blog" description="" type="rss" version="RSS" htmlUrl="https://www.alchemy.com/blog" xmlUrl="https://www.alchemy.com/blog/rss.xml"/>
-		<outline text="Bitcoin Core releases" title="Bitcoin Core releases" description="" type="rss" version="RSS" htmlUrl="https://bitcoin.org/en/version-history" xmlUrl="https://bitcoin.org/en/rss/releases.rss"/>
 		<outline text="BlockNative" title="BlockNative" description="" type="rss" version="RSS" htmlUrl="https://www.blocknative.com/blog" xmlUrl="https://blog.blocknative.com/blog/rss.xml"/>
 		<outline text="Blockstream" title="Blockstream" description="" type="rss" version="RSS" htmlUrl="https://blog.blockstream.com/" xmlUrl="https://blog.blockstream.com/rss/"/>
 		<outline text="Casa Blog" title="Casa Blog" description="" type="rss" version="RSS" htmlUrl="https://blog.keys.casa/" xmlUrl="https://blog.keys.casa/rss/"/>
@@ -44,6 +43,8 @@
 		<outline text="DappRadar Blog" title="DappRadar Blog" description="" type="rss" version="RSS" htmlUrl="https://dappradar.com/blog" xmlUrl="https://dappradar.com/blog/feed"/>
 		<outline text="Decrypt" title="Decrypt" description="" type="rss" version="RSS" htmlUrl="https://decrypt.co/feed" xmlUrl="https://decryptmedia.com/feed/"/>
 		<outline text="Hacker Noon" title="Hacker Noon" description="" type="rss" version="RSS" htmlUrl="https://hackernoon.com/" xmlUrl="https://hackernoon.com/feed"/>
+		<outline text="PANews 精选" title="PANews 精选" description="" type="rss" version="RSS" htmlUrl="https://www.panewslab.com/zh/rss" xmlUrl="https://www.panewslab.com/zh/rss/foryou.xml"/>
+		<outline text="PANews 快讯" title="PANews 快讯" description="" type="rss" version="RSS" htmlUrl="https://www.panewslab.com/zh/rss" xmlUrl="https://www.panewslab.com/zh/rss/newsflash.xml"/>
 		<outline text="TechCrunch - Bitcoin" title="TechCrunch - Bitcoin" description="" type="rss" version="RSS" htmlUrl="https://techcrunch.com/" xmlUrl="https://techcrunch.com/tag/bitcoin/feed"/>
 		<outline text="Trustnodes" title="Trustnodes" description="" type="rss" version="RSS" htmlUrl="https://www.trustnodes.com/" xmlUrl="https://www.trustnodes.com/feed"/>
 		<outline text="Web3Wire" title="Web3Wire" description="" type="rss" version="RSS" htmlUrl="https://web3wire.org/category/web3" xmlUrl="https://web3wire.org/feed/gn"/>
@@ -76,6 +77,10 @@
 		<outline text="Bankless" title="Bankless" description="" type="rss" version="RSS" htmlUrl="http://podcast.banklesshq.com/" xmlUrl="http://feeds.libsyn.com/247424/rss"/>
 		<outline text="HODLong 后浪" title="HODLong 后浪" description="" type="rss" version="RSS" htmlUrl="https://hodlong-hou-lang.simplecast.com/" xmlUrl="https://feeds.simplecast.com/lnmJvIXR"/>
 		<outline text="Unchained Podcast" title="Unchained Podcast" description="" type="rss" version="RSS" htmlUrl="https://unchainedpodcast.com/" xmlUrl="https://unchainedpodcast.com/feed/"/>
+	<outline text="07. Others" title="07. Others">
+		<outline text="Ethereum Research - Latest posts" title="Ethereum Research - Latest posts" description="" type="rss" version="RSS" htmlUrl="https://ethresear.ch/" xmlUrl="https://ethresear.ch/posts.rss"/>
+		<outline text="Ethereum Research - Latest topics" title="Ethereum Research - Latest topics" description="" type="rss" version="RSS" htmlUrl="https://ethresear.ch/latest" xmlUrl="https://ethresear.ch/latest.rss"/>
+	</outline>
 	<outline text="07. Others" title="07. Others">
 		<outline text="Ethereum Research - Latest posts" title="Ethereum Research - Latest posts" description="" type="rss" version="RSS" htmlUrl="https://ethresear.ch/" xmlUrl="https://ethresear.ch/posts.rss"/>
 		<outline text="Ethereum Research - Latest topics" title="Ethereum Research - Latest topics" description="" type="rss" version="RSS" htmlUrl="https://ethresear.ch/latest" xmlUrl="https://ethresear.ch/latest.rss"/>

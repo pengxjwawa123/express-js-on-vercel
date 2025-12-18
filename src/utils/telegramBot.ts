@@ -194,7 +194,8 @@ export async function sendTelegramMessages(
   chatId: string | number,
   items: any[],
   timeRange: string,
-  useOpenAI: boolean = true
+  useOpenAI: boolean = true,
+  preOptimizedMessage?: string // 可选：已优化的消息内容，如果提供则直接使用，不再调用 OpenAI
 ): Promise<boolean> {
   try {
     // Telegram 消息最大长度为 4096 字符
@@ -202,8 +203,11 @@ export async function sendTelegramMessages(
     
     let fullMessage: string
     
-    // 如果启用 AI 优化，先优化内容（使用 DeepSeek）
-    if (useOpenAI) {
+    // 如果提供了已优化的消息，直接使用（避免重复调用 OpenAI）
+    if (preOptimizedMessage) {
+      fullMessage = preOptimizedMessage
+    } else if (useOpenAI) {
+      // 如果启用 AI 优化，先优化内容（使用 DeepSeek）
       try {
         const { optimizeSecurityDataWithOpenAI } = await import('./openaiOptimizer.js')
         fullMessage = await optimizeSecurityDataWithOpenAI(items, timeRange)

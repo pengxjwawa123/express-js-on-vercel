@@ -5,6 +5,7 @@ import cron from 'node-cron'
 import { parseOPML } from './utils/opmlParser.js'
 import { fetchAllSecurityFeeds, fetchAllSecurityFeedsWithCategory } from './utils/rssService.js'
 import { sendTelegramMessages, forwardTelegramMessage, extractMessageInfoFromUpdate } from './utils/telegramBot.js'
+import { initRedis, filterPushedMessages, markMessagesAsPushed } from './utils/redisCache.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -26,10 +27,10 @@ const CACHE_DURATION = 2 * 60 * 60 * 1000 // 2小时缓存
 const BACKGROUND_UPDATE_INTERVAL = 30 * 60 * 1000 // 30分钟后台更新一次
 const TELEGRAM_PUSH_INTERVAL = 30 * 60 * 1000 // 30分钟推送一次
 
-// 推送到 Telegram Bot
+// 推送到 Telegram Bot（带 Redis 去重）
 async function pushToTelegramBot(newItems: any[], timeRange: string) {
   const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-  const chatIds = ['-1002807276621', '7715712244']
+  const chatIds = ['7715712244']
 
   try {
     if (newItems.length === 0) {
@@ -37,19 +38,59 @@ async function pushToTelegramBot(newItems: any[], timeRange: string) {
       return
     }
 
-    console.log(`Pushing ${newItems.length} new items to Telegram to ${chatIds.length} targets...`)
+    // 确保 Redis 已连接
+    await initRedis()
+
+    // 使用 Redis 过滤已推送的消息
+    const unpushedItems = await filterPushedMessages(newItems)
+    
+    if (unpushedItems.length === 0) {
+      console.log('All items have already been pushed, skipping...')
+      return
+    }
+
+    console.log(`Pushing ${unpushedItems.length} new items to Telegram (${newItems.length - unpushedItems.length} already pushed) to ${chatIds.length} targets...`)
+    
+    // 先优化一次消息（避免对每个 chatId 重复调用 OpenAI）
+    let optimizedMessage: string | undefined
+    try {
+      const { optimizeSecurityDataWithOpenAI } = await import('./utils/openaiOptimizer.js')
+      optimizedMessage = await optimizeSecurityDataWithOpenAI(unpushedItems, timeRange)
+      console.log('Message optimized with OpenAI once for all chatIds')
+    } catch (error) {
+      console.error('OpenAI optimization failed, will use default format for each chatId:', error)
+      // 如果优化失败，optimizedMessage 保持 undefined，每个 chatId 会使用默认格式
+    }
+    
+    let allSuccess = true
     for (const cid of chatIds) {
       try {
-        const success = await sendTelegramMessages(botToken, cid, newItems, timeRange)
+        // 如果已有优化消息，直接使用；否则在 sendTelegramMessages 内部优化
+        const success = await sendTelegramMessages(
+          botToken, 
+          cid, 
+          unpushedItems, 
+          timeRange, 
+          !optimizedMessage, // 如果已有优化消息，不再调用 OpenAI
+          optimizedMessage   // 传入已优化的消息
+        )
         if (success) {
           lastTelegramPushTime = Date.now()
           console.log(`Telegram push to ${cid} completed successfully`)
         } else {
           console.error(`Failed to push to Telegram chat ${cid}`)
+          allSuccess = false
         }
       } catch (err) {
         console.error(`Error pushing to Telegram chat ${cid}:`, err)
+        allSuccess = false
       }
+    }
+
+    // 只有所有推送都成功时，才标记为已推送
+    if (allSuccess && unpushedItems.length > 0) {
+      await markMessagesAsPushed(unpushedItems, 48) // 48小时后过期
+      console.log(`Marked ${unpushedItems.length} messages as pushed in Redis`)
     }
   } catch (error) {
     console.error('Error pushing to Telegram Bot:', error)
@@ -66,6 +107,10 @@ async function updateCacheInBackground() {
   isUpdating = true
   try {
     console.log('Starting background cache update...')
+    
+    // 确保 Redis 已连接
+    await initRedis()
+    
     const feeds = parseOPML()
     const securityItems = await fetchAllSecurityFeeds(feeds)
     
@@ -74,7 +119,7 @@ async function updateCacheInBackground() {
     const cutoffTime = lastTelegramPushTime > 0 ? lastTelegramPushTime : now - TELEGRAM_PUSH_INTERVAL
     
     // 过滤出新的数据（基于发布时间）
-    const newItems = securityItems.filter(item => {
+    const timeBasedNewItems = securityItems.filter(item => {
       if (!item.pubDate) return false
       const itemTime = new Date(item.pubDate).getTime()
       return itemTime > cutoffTime
@@ -83,14 +128,16 @@ async function updateCacheInBackground() {
     cachedSecurityItems = securityItems
     lastCacheTime = now
     
-    console.log(`Cache updated successfully: ${securityItems.length} items (${newItems.length} new)`)
+    console.log(`Cache updated successfully: ${securityItems.length} items (${timeBasedNewItems.length} new by time)`)
     
-    // 如果有新数据，推送到 Telegram
-    if (newItems.length > 0) {
+    // 如果有新数据，推送到 Telegram（pushToTelegramBot 内部会进行 Redis 去重）
+    if (timeBasedNewItems.length > 0) {
       const timeRange = lastTelegramPushTime > 0
         ? `过去 ${Math.floor((now - lastTelegramPushTime) / 60000)} 分钟`
         : '最近 30 分钟'
-      await pushToTelegramBot(newItems, timeRange)
+      await pushToTelegramBot(timeBasedNewItems, timeRange)
+    } else {
+      console.log('No new items by time, skipping Telegram push')
     }
   } catch (error) {
     console.error('Error updating cache in background:', error)
@@ -148,8 +195,8 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
     cachedSecurityItems = securityItems
     lastCacheTime = now
     
-    // 首次加载时，如果有 Telegram 配置，推送所有数据（可选）
-    // 或者只推送新数据
+    // 首次加载时，如果有 Telegram 配置，推送新数据
+    // pushToTelegramBot 内部会进行 Redis 去重，避免重复推送
     const cutoffTime = lastTelegramPushTime > 0 ? lastTelegramPushTime : now - TELEGRAM_PUSH_INTERVAL
     const newItems = securityItems.filter(item => {
       if (!item.pubDate) return false
@@ -161,7 +208,7 @@ async function handleSecurityFeed(req: express.Request, res: express.Response) {
       const timeRange = lastTelegramPushTime > 0
         ? `过去 ${Math.floor((now - lastTelegramPushTime) / 60000)} 分钟`
         : '最近 30 分钟'
-      // 异步推送，不阻塞响应
+      // 异步推送，不阻塞响应（内部会进行 Redis 去重）
       pushToTelegramBot(newItems, timeRange).catch(err => 
         console.error('Telegram push failed:', err)
       )
@@ -839,13 +886,13 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 // 启动时立即执行一次（可选，用于初始化）
 // updateCacheInBackground().catch(err => console.error('Initial update failed:', err))
 
-// 手动触发 Telegram 推送
+// 手动触发 Telegram 推送（带 Redis 去重）
 app.get('/api/telegram/push', async (req, res) => {
   try {
-    const botToken = '8242493572:AAG55rSWBIyfubA6JExQAV8DYZdDAINLPY8'
-    const chatIds = ['-1002807276621', '7715712244']
-
     console.log('Manual Telegram push triggered...')
+    
+    // 确保 Redis 已连接
+    await initRedis()
     
     // 获取最新数据
     const feeds = parseOPML()
@@ -870,28 +917,20 @@ app.get('/api/telegram/push', async (req, res) => {
       ? '最近 30 分钟'
       : '最新数据'
     
-    // 推送到 Telegram
-    const { sendTelegramMessages } = await import('./utils/telegramBot.js')
-    const results: { chatId: string, success: boolean }[] = []
-    for (const cid of chatIds) {
-      try {
-        const ok = await sendTelegramMessages(botToken, cid, itemsToPush, timeRange)
-        results.push({ chatId: cid, success: ok })
-        if (ok) console.log(`Manual push sent to ${cid}`)
-        else console.error(`Manual push failed for ${cid}`)
-      } catch (err) {
-        console.error(`Error sending manual push to ${cid}:`, err)
-        results.push({ chatId: cid, success: false })
-      }
-    }
-
-    const anySuccess = results.some(r => r.success)
-    if (anySuccess) {
-      lastTelegramPushTime = now
-      res.json({ success: true, results, itemsCount: itemsToPush.length, timeRange })
-    } else {
-      res.status(500).json({ success: false, results, error: 'Failed to send Telegram messages to all targets' })
-    }
+    // 使用 pushToTelegramBot 函数，它会自动进行 Redis 去重
+    await pushToTelegramBot(itemsToPush, timeRange)
+    
+    // 获取实际推送的数量（通过再次过滤）
+    const unpushedItems = await filterPushedMessages(itemsToPush)
+    const actuallyPushedCount = itemsToPush.length - unpushedItems.length
+    
+    res.json({ 
+      success: true, 
+      itemsCount: itemsToPush.length,
+      actuallyPushedCount,
+      skippedCount: unpushedItems.length,
+      timeRange 
+    })
   } catch (error) {
     console.error('Error in manual Telegram push:', error)
     res.status(500).json({
