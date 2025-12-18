@@ -66,11 +66,12 @@ export async function optimizeSecurityDataWithOpenAI(
 2. 按照重要性和紧急程度排序
 3. 突出关键信息（攻击类型、受影响项目、损失金额等）
 4. 使用 emoji 增强可读性
-5. 格式化为 Telegram HTML 格式（支持 <b>、<i>、<a> 等标签）
-6. 每条资讯包含：标题、时间、分类、链接。**重要**：在你生成的消息中，请在对应条目位置保留传入的占位符 token [[LINK_n]]（例如 [[LINK_0]]、[[LINK_1]]），并**不要**改变这些 token 的文本。程序会在发送前把这些 token 替换为对应条目的原始链接；不要在内容末尾附加原始链接清单或重复原始信息。
-7. 如果资讯数量较多，进行分组展示
-8. 总长度控制在 3500 字符以内
-9. **只包含区块链攻击相关的事件，忽略其他内容**
+5. 格式化为 Telegram HTML 格式（**只支持以下标签**：<b>、<strong>、<i>、<em>、<u>、<ins>、<s>、<strike>、<del>、<a>、<code>、<pre>）
+6. **禁止使用**：<hr>、<br>、<div>、<span>、<p>、<h1>-<h6>、<ul>、<ol>、<li> 等 Telegram 不支持的标签。如需分隔，使用换行符或分隔线字符（如 ─）
+7. 每条资讯包含：标题、时间、分类、链接。**重要**：在你生成的消息中，请在对应条目位置保留传入的占位符 token [[LINK_n]]（例如 [[LINK_0]]、[[LINK_1]]），并**不要**改变这些 token 的文本。程序会在发送前把这些 token 替换为对应条目的原始链接；不要在内容末尾附加原始链接清单或重复原始信息。
+8. 如果资讯数量较多，进行分组展示
+9. 总长度控制在 3500 字符以内
+10. **只包含区块链攻击相关的事件，忽略其他内容**
 
 时间范围：${timeRange}
 资讯数量：${items.length} 条（请过滤后只处理区块链攻击相关事件）
@@ -128,6 +129,15 @@ ${itemsSummary}
       // 清理任何残留的 example.com 占位链接，避免发送占位内容
       optimizedContent = optimizedContent.replace(/https?:\/\/(?:www\.)?example\.com\/?\S*/gi, '链接不可用')
       optimizedContent = optimizedContent.replace(/example\.com/gi, '链接不可用')
+      
+      // 清理 Telegram 不支持的 HTML 标签
+      // Telegram 只支持: <b>, <strong>, <i>, <em>, <u>, <ins>, <s>, <strike>, <del>, <a>, <code>, <pre>
+      // 移除不支持的标签，如 <hr>, <br>, <div>, <span>, <p> 等
+      optimizedContent = optimizedContent.replace(/<hr\s*\/?>/gi, '\n─'.repeat(20) + '\n') // 用分隔线替换
+      optimizedContent = optimizedContent.replace(/<br\s*\/?>/gi, '\n') // 换行标签替换为换行符
+      optimizedContent = optimizedContent.replace(/<\/?(div|span|p|section|article|header|footer|nav|main)\b[^>]*>/gi, '') // 移除块级标签
+      optimizedContent = optimizedContent.replace(/<\/?(h[1-6]|ul|ol|li|table|tr|td|th|thead|tbody)\b[^>]*>/gi, '') // 移除其他不支持的标签
+      
       console.log('DeepSeek optimization and filtering completed successfully')
 
       return optimizedContent

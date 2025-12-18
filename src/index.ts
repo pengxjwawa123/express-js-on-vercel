@@ -890,7 +890,7 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 app.get('/api/telegram/push', async (req, res) => {
   try {
     console.log('Manual Telegram push triggered...')
-    
+
     // 确保 Redis 已连接
     await initRedis()
     
