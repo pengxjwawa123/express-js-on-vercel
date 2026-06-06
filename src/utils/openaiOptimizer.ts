@@ -16,7 +16,7 @@ export async function optimizeSecurityDataWithOpenAI(
   items: SecurityItem[],
   timeRange: string
 ): Promise<string> {
-  const apiKey = 'sk-3028e4a6841a4efd8d360e7d344e62c0'
+  const apiKey = process.env.DEEPSEEK_API_KEY || ''
   
   if (items.length === 0) {
     const { formatSecurityDataForTelegram } = await import('./telegramBot.js')

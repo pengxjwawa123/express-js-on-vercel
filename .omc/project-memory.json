@@ -1,0 +1,115 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1780708975939,
+  "projectRoot": "/Users/mac/cat/express-js-on-vercel",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "express",
+        "version": "4.18.2",
+        "category": "backend"
+      }
+    ],
+    "packageManager": "pnpm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "pnpm build",
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": "pnpm dev",
+    "scripts": {
+      "dev": "NODE_ENV=development tsx watch src/server.ts",
+      "start": "NODE_ENV=production tsx src/server.ts",
+      "build": "tsc"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase",
+    "importStyle": "ES modules",
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "components",
+      "public",
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "components": {
+      "path": "components",
+      "purpose": "UI components",
+      "fileCount": 1,
+      "lastAccessed": 1780708975922,
+      "keyFiles": [
+        "about.htm"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 2,
+      "lastAccessed": 1780708975922,
+      "keyFiles": [
+        "logo.png",
+        "style.css"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 1,
+      "lastAccessed": 1780708975927,
+      "keyFiles": [
+        "index.ts"
+      ]
+    },
+    "src/utils": {
+      "path": "src/utils",
+      "purpose": "Utility functions",
+      "fileCount": 6,
+      "lastAccessed": 1780708975928,
+      "keyFiles": [
+        "openaiOptimizer.ts",
+        "opmlParser.ts",
+        "redisCache.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/utils/openaiOptimizer.ts",
+      "accessCount": 2,
+      "lastAccessed": 1780709134507,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
