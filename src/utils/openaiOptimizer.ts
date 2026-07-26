@@ -89,7 +89,7 @@ ${itemsSummary}
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat', // DeepSeek 聊天模型
+        model: 'deepseek-v4-flash', // DeepSeek 聊天模型
         messages: [
           {
             role: 'system',
